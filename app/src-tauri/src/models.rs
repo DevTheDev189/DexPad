@@ -100,3 +100,4 @@ pub enum OutgoingCommand {
     #[serde(rename = "STREAM_INPUTS")]
     StreamInputs { enabled: bool },
 }
+

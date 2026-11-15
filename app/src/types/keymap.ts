@@ -30,8 +30,20 @@ export interface ButtonBinding {
 export interface Profile {
   slot: number;
   name: string;
+  gameTitle?: string;
+  coverUrl?: string;
+  genre?: string;
+  description?: string;
   sticks: SticksConfig;
   buttons: Record<string, ButtonBinding>;
+}
+
+export interface GameSearchResult {
+  id: number;
+  name: string;
+  background_image: string;
+  released?: string;
+  genres?: { name: string }[];
 }
 
 export interface SerialPortEntry {
@@ -145,3 +157,4 @@ export const MAC_KEY_OPTIONS: KeyOption[] = [
   { code: 'SCROLL_UP', label: 'Mouse Scroll Wheel Up', category: 'mouse' },
   { code: 'SCROLL_DOWN', label: 'Mouse Scroll Wheel Down', category: 'mouse' },
 ];
+

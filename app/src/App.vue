@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import type { ControllerControlId, ButtonBinding } from './types/keymap';
+import type { ControllerControlId, ButtonBinding, Profile } from './types/keymap';
 import MetaballDefs from './components/MetaballDefs.vue';
 import CosmicBackground from './components/CosmicBackground.vue';
 import NimbusControllerSvg from './components/NimbusControllerSvg.vue';
+import BindingTable from './components/BindingTable.vue';
 import ProfilePillBar from './components/ProfilePillBar.vue';
 import BindingInspector from './components/BindingInspector.vue';
 import KeyCaptureModal from './components/KeyCaptureModal.vue';
+import ProfileManagerModal from './components/ProfileManagerModal.vue';
+import CosmicIcon from './components/CosmicIcon.vue';
 import { useProfiles } from './composables/useProfiles';
 import { useSerial } from './composables/useSerial';
 
@@ -19,6 +22,7 @@ const {
   isDirty,
   selectSlot,
   renameProfile,
+  setProfileInSlot,
   updateButtonBinding,
   updateStickConfig,
   markClean,
@@ -42,8 +46,11 @@ const {
   toggleTelemetryStream,
 } = useSerial();
 
-// Modal & Toast states
+// UI View Modes & Modals
+const currentView = ref<'controller' | 'table'>('controller');
+const isManagerOpen = ref(false);
 const capturingControlId = ref<ControllerControlId | null>(null);
+
 const toastMessage = ref<string | null>(null);
 let toastTimer: any = null;
 
@@ -55,7 +62,7 @@ const showToast = (msg: string) => {
   }, 3500);
 };
 
-// Spotlight position for cosmic background
+// Spotlight state for reactive background aura
 const spotlightState = ref<{ x: number; y: number; active: boolean; color?: string }>({
   x: window.innerWidth * 0.45,
   y: window.innerHeight * 0.5,
@@ -69,11 +76,10 @@ const handleControlSelect = (id: ControllerControlId) => {
 const handleControlHover = (id: ControllerControlId | null, pos?: { x: number; y: number }) => {
   hoveredControl.value = id;
   if (id && pos) {
-    // Offset relative to screen center
     const rect = document.querySelector('.controller-svg')?.getBoundingClientRect();
     if (rect) {
-      const scaleX = rect.width / 900;
-      const scaleY = rect.height / 560;
+      const scaleX = rect.width / 980;
+      const scaleY = rect.height / 600;
       spotlightState.value = {
         x: rect.left + pos.x * scaleX,
         y: rect.top + pos.y * scaleY,
@@ -89,7 +95,7 @@ const handleControlHover = (id: ControllerControlId | null, pos?: { x: number; y
 const handleSlotChange = (slot: number) => {
   selectSlot(slot);
   switchDeviceSlot(slot);
-  showToast(`Switched to Profile Slot ${slot + 1}`);
+  showToast(`Active Slot: ${slot + 1} (${profiles.value[slot].name})`);
 };
 
 const handleSaveToDevice = async () => {
@@ -109,9 +115,16 @@ const openCaptureModal = (id: ControllerControlId) => {
 const handleCapturedBinding = (binding: ButtonBinding) => {
   if (capturingControlId.value) {
     updateButtonBinding(capturingControlId.value, binding);
-    showToast(`Bound ${capturingControlId.value.toUpperCase()} to ${binding.code || binding.type}`);
+    showToast(`Mapped ${capturingControlId.value.toUpperCase()} to ${binding.code || binding.type}`);
   }
   capturingControlId.value = null;
+};
+
+const handleAddProfileFromHub = (newProf: Profile, targetSlot: number) => {
+  setProfileInSlot(targetSlot, newProf);
+  selectSlot(targetSlot);
+  isManagerOpen.value = false;
+  showToast(`Applied "${newProf.name}" to Slot ${targetSlot + 1}`);
 };
 
 const handleExportJson = () => {
@@ -137,7 +150,7 @@ const handleImportJson = () => {
       reader.onload = (event) => {
         const content = event.target?.result as string;
         if (importProfileJson(content)) {
-          showToast('Profile imported successfully!');
+          showToast('Profile imported successfully');
         } else {
           showToast('Invalid profile JSON file');
         }
@@ -157,7 +170,7 @@ const handleImportJson = () => {
     <!-- Parallax Cosmic Background + Reactive Orb -->
     <CosmicBackground :spotlight="spotlightState" />
 
-    <!-- Main Container -->
+    <!-- Main App Container -->
     <div class="app-shell">
       <!-- ============================================================== -->
       <!-- TOP NAVIGATION BAR -->
@@ -167,7 +180,7 @@ const handleImportJson = () => {
           <div class="brand-orb"></div>
           <div>
             <h1 class="brand-title">NIMBUS+ <span class="accent-text">COSMIC BRIDGE</span></h1>
-            <p class="brand-subtitle">Hardware USB Controller Bridge for macOS</p>
+            <p class="brand-subtitle">Driverless Hardware USB Gamepad Bridge for macOS</p>
           </div>
         </div>
 
@@ -177,11 +190,11 @@ const handleImportJson = () => {
             <select v-model="selectedPort" class="port-select">
               <option value="" disabled>Select Serial Port</option>
               <option v-for="p in ports" :key="p.name" :value="p.name">
-                {{ p.name }} {{ p.is_esp32 ? '★ [ESP32-S3]' : '' }}
+                {{ p.name }} {{ p.is_esp32 ? '[ESP32-S3]' : '' }}
               </option>
             </select>
             <button class="icon-btn" title="Refresh serial ports" @click="refreshPorts">
-              ↻
+              <CosmicIcon name="refresh" size="13" />
             </button>
           </div>
 
@@ -190,7 +203,7 @@ const handleImportJson = () => {
             :class="{ disconnect: isConnected }"
             @click="isConnected ? disconnect() : connect()"
           >
-            <span class="status-indicator-dot" :class="{ live: isConnected }"></span>
+            <CosmicIcon :name="isConnected ? 'unlink' : 'link'" size="13" />
             <span>{{ isConnected ? 'Disconnect' : 'Connect Dongle' }}</span>
           </button>
 
@@ -201,7 +214,7 @@ const handleImportJson = () => {
             :title="isStreamingTelemetry ? 'Stop live telemetry' : 'Stream live inputs from controller (30Hz)'"
             @click="toggleTelemetryStream()"
           >
-            <span class="telemetry-wave"></span>
+            <CosmicIcon name="radio" size="13" />
             <span>Telemetry</span>
           </button>
         </div>
@@ -209,33 +222,41 @@ const handleImportJson = () => {
         <!-- Export / Import Actions -->
         <div class="extra-actions">
           <button class="btn-glass-secondary btn-sm" title="Import JSON profile" @click="handleImportJson">
-            Import
+            <CosmicIcon name="upload" size="12" />
+            <span>Import</span>
           </button>
           <button class="btn-glass-secondary btn-sm" title="Export current profile as JSON" @click="handleExportJson">
-            Export
+            <CosmicIcon name="download" size="12" />
+            <span>Export</span>
           </button>
         </div>
       </header>
 
       <!-- ============================================================== -->
-      <!-- PROFILE TABS BAR -->
+      <!-- PROFILE TABS & VIEW SWITCHER BAR -->
       <!-- ============================================================== -->
       <ProfilePillBar
         :profiles="profiles"
         :active-slot="activeSlot"
         :is-dirty="isDirty"
         :is-connected="isConnected"
+        :current-view="currentView"
         @select-slot="handleSlotChange"
         @rename-slot="renameProfile"
         @save-to-device="handleSaveToDevice"
+        @open-manager="isManagerOpen = true"
+        @toggle-view="currentView = $event"
       />
 
       <!-- ============================================================== -->
-      <!-- WORKSPACE: Controller Viewport + Binding Inspector -->
+      <!-- WORKSPACE: Controller View / Table View + Inspector -->
       <!-- ============================================================== -->
       <main class="main-workspace">
-        <div class="controller-card glass-panel">
+        <!-- Center Viewport (Controller or Table) -->
+        <div class="main-display-card glass-panel">
+          <!-- View 1: Interactive Vector Controller -->
           <NimbusControllerSvg
+            v-if="currentView === 'controller'"
             :profile="activeProfile"
             :selected-control="selectedControl"
             :hovered-control="hoveredControl"
@@ -244,8 +265,18 @@ const handleImportJson = () => {
             @select="handleControlSelect"
             @hover="handleControlHover"
           />
+
+          <!-- View 2: Controller-to-Keybind Mapping Table -->
+          <BindingTable
+            v-else
+            :profile="activeProfile"
+            :selected-control="selectedControl"
+            @select-control="handleControlSelect"
+            @record-control="openCaptureModal"
+          />
         </div>
 
+        <!-- Right Side: Binding Inspector -->
         <BindingInspector
           :control-id="selectedControl"
           :profile="activeProfile"
@@ -260,18 +291,19 @@ const handleImportJson = () => {
         <div class="footer-left">
           <span class="footer-tag">STATUS:</span>
           <span class="footer-val">
-            {{ connectionError || lastAckMessage || (isConnected ? 'Dongle ready on ' + selectedPort : 'Awaiting connection') }}
+            {{ connectionError || lastAckMessage || (isConnected ? 'Connected to ' + selectedPort : 'Awaiting hardware connection') }}
           </span>
         </div>
         <div class="footer-right">
-          <span>Firmware: v2.0.0</span>
-          <span>•</span>
+          <span>Firmware v2.0.0</span>
+          <span class="dot-sep">•</span>
           <span>Shortcut: Home + D-Pad to cycle slots</span>
         </div>
       </footer>
     </div>
 
-    <!-- Live Keystroke Record Modal -->
+    <!-- Modals -->
+    <!-- 1. Live Input Capture Modal -->
     <KeyCaptureModal
       v-if="capturingControlId"
       :control-id="capturingControlId"
@@ -279,9 +311,19 @@ const handleImportJson = () => {
       @close="capturingControlId = null"
     />
 
+    <!-- 2. Game Profile & Presets Hub Modal -->
+    <ProfileManagerModal
+      v-if="isManagerOpen"
+      :profiles="profiles"
+      :active-slot="activeSlot"
+      @close="isManagerOpen = false"
+      @select-profile="handleSlotChange"
+      @add-profile="handleAddProfileFromHub"
+    />
+
     <!-- Toast Notification Banner -->
     <div v-if="toastMessage" class="toast-banner">
-      <span class="toast-sparkle">✦</span>
+      <CosmicIcon name="sparkles" size="13" class="toast-sparkle" />
       <span>{{ toastMessage }}</span>
     </div>
   </div>
@@ -303,13 +345,13 @@ const handleImportJson = () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 14px 18px 10px 18px;
-  gap: 12px;
+  padding: 12px 18px 8px 18px;
+  gap: 10px;
 }
 
 /* Top Nav */
 .top-nav {
-  height: 58px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -324,16 +366,16 @@ const handleImportJson = () => {
 }
 
 .brand-orb {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #ffffff 0%, var(--accent-cyan) 40%, var(--accent-violet) 100%);
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.7);
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.75);
   animation: pulseGlow 2.5s infinite;
 }
 
 .brand-title {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 800;
   letter-spacing: 1.5px;
   color: #fff;
@@ -346,7 +388,7 @@ const handleImportJson = () => {
 }
 
 .brand-subtitle {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--text-muted);
 }
 
@@ -360,8 +402,8 @@ const handleImportJson = () => {
 .port-picker-group {
   display: flex;
   align-items: center;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(147, 197, 253, 0.16);
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   padding: 2px 6px;
 }
@@ -387,8 +429,10 @@ const handleImportJson = () => {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px 6px;
-  font-size: 14px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: color 0.2s ease;
 }
 
@@ -406,19 +450,6 @@ const handleImportJson = () => {
   border-color: rgba(239, 68, 68, 0.4);
 }
 
-.status-indicator-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #64748b;
-  transition: all 0.3s ease;
-}
-
-.status-indicator-dot.live {
-  background: #34d399;
-  box-shadow: 0 0 8px #34d399;
-}
-
 .stream-btn {
   padding: 6px 12px;
   font-size: 12px;
@@ -428,7 +459,7 @@ const handleImportJson = () => {
   background: rgba(56, 189, 248, 0.2);
   border-color: var(--accent-cyan);
   color: #fff;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
 }
 
 .extra-actions {
@@ -438,7 +469,7 @@ const handleImportJson = () => {
 }
 
 .btn-sm {
-  padding: 5px 10px;
+  padding: 5px 11px;
   font-size: 11.5px;
 }
 
@@ -446,11 +477,11 @@ const handleImportJson = () => {
 .main-workspace {
   flex: 1;
   display: flex;
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
 }
 
-.controller-card {
+.main-display-card {
   flex: 1;
   display: flex;
   align-items: center;
@@ -485,7 +516,11 @@ const handleImportJson = () => {
 .footer-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+}
+
+.dot-sep {
+  opacity: 0.4;
 }
 
 /* Toast */
@@ -494,13 +529,13 @@ const handleImportJson = () => {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(56, 189, 248, 0.3);
+  background: rgba(12, 18, 36, 0.92);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 24px rgba(56, 189, 248, 0.35);
   padding: 8px 18px;
   border-radius: 9999px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: #fff;
   display: flex;

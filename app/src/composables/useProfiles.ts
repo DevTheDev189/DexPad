@@ -6,6 +6,10 @@ const DEFAULT_PROFILES: Profile[] = [
   {
     slot: 0,
     name: 'Minecraft',
+    gameTitle: 'Minecraft: Java Edition',
+    coverUrl: 'https://images.unsplash.com/photo-1627856013091-fed6e4e30025?w=600&auto=format&fit=crop&q=80',
+    genre: 'Sandbox / Survival',
+    description: 'WASD walking, mouse camera, space jump, shift sneak, Q drop item, E inventory.',
     sticks: {
       left: {
         mode: 'digital_keys',
@@ -43,10 +47,14 @@ const DEFAULT_PROFILES: Profile[] = [
       home: { type: 'key', code: 'KEY_TAB' },
     },
   },
-  // Slot 1: 2D Platformer
+  // Slot 1: 2D Platformer / Hollow Knight
   {
     slot: 1,
     name: '2D Platformer',
+    gameTitle: 'Hollow Knight',
+    coverUrl: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=600&auto=format&fit=crop&q=80',
+    genre: 'Metroidvania',
+    description: 'Arrow key movement, Z jump, X slash, A cast/heal, C dash.',
     sticks: {
       left: {
         mode: 'digital_keys',
@@ -76,6 +84,10 @@ const DEFAULT_PROFILES: Profile[] = [
   {
     slot: 2,
     name: 'Desktop Mouse',
+    gameTitle: 'macOS Desktop Utility',
+    coverUrl: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=600&auto=format&fit=crop&q=80',
+    genre: 'Productivity',
+    description: 'Silky smooth cursor control, left/right clicks, wheel scrolling, mission control.',
     sticks: {
       left: {
         mode: 'none',
@@ -95,13 +107,17 @@ const DEFAULT_PROFILES: Profile[] = [
       x: { type: 'mouse_button', code: 'MOUSE_MIDDLE' },
       l1: { type: 'mouse_scroll', delta: 1, repeat_ms: 100 },
       r1: { type: 'mouse_scroll', delta: -1, repeat_ms: 100 },
-      home: { type: 'key', code: 'KEY_LEFT_GUI' }, // ⌘ macOS Mission Control
+      home: { type: 'key', code: 'KEY_LEFT_GUI' },
     },
   },
-  // Slot 3: Action FPS
+  // Slot 3: Action FPS / Cyberpunk
   {
     slot: 3,
     name: 'Action FPS',
+    gameTitle: 'Cyberpunk 2077',
+    coverUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=600&auto=format&fit=crop&q=80',
+    genre: 'Action RPG / Shooter',
+    description: 'WASD movement, responsive camera, Space jump, C crouch, R reload, F interact.',
     sticks: {
       left: {
         mode: 'digital_keys',
@@ -155,6 +171,14 @@ export function useProfiles() {
     }
   };
 
+  const setProfileInSlot = (slot: number, profile: Profile) => {
+    profiles.value[slot] = {
+      ...profile,
+      slot,
+    };
+    isDirty.value = true;
+  };
+
   const updateButtonBinding = (controlId: string, binding: ButtonBinding) => {
     if (!activeProfile.value.buttons) {
       activeProfile.value.buttons = {};
@@ -202,6 +226,7 @@ export function useProfiles() {
     isDirty,
     selectSlot,
     renameProfile,
+    setProfileInSlot,
     updateButtonBinding,
     updateStickConfig,
     markClean,

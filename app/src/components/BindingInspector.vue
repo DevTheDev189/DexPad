@@ -10,6 +10,7 @@ import type {
   StickCurve,
 } from '../types/keymap';
 import { MAC_KEY_OPTIONS } from '../types/keymap';
+import CosmicIcon from './CosmicIcon.vue';
 
 const props = defineProps<{
   controlId: ControllerControlId | null;
@@ -39,7 +40,6 @@ const currentButtonBinding = computed<ButtonBinding>(() => {
   return props.profile.buttons[props.controlId] || { type: 'none' };
 });
 
-// Search filter for keycode dropdown
 const searchFilter = ref('');
 const filteredKeyOptions = computed(() => {
   if (!searchFilter.value) return MAC_KEY_OPTIONS;
@@ -49,7 +49,6 @@ const filteredKeyOptions = computed(() => {
   );
 });
 
-// Modifiers helper
 const setBindingType = (type: ButtonBindingType) => {
   if (!props.controlId || isStick.value) return;
   const current = { ...currentButtonBinding.value, type };
@@ -107,59 +106,41 @@ const setTriggerThreshold = (threshold: number) => {
   });
 };
 
-// Stick update handlers
+// Stick handlers
 const updateStickMode = (mode: StickMode) => {
   if (!props.controlId || !isStick.value || !currentStickConfig.value) return;
   const stickKey = props.controlId === 'left_stick' ? 'left' : 'right';
-  emit('update-stick', stickKey, {
-    ...currentStickConfig.value,
-    mode,
-  });
+  emit('update-stick', stickKey, { ...currentStickConfig.value, mode });
 };
 
 const updateStickDeadzone = (deadzone: number) => {
   if (!props.controlId || !isStick.value || !currentStickConfig.value) return;
   const stickKey = props.controlId === 'left_stick' ? 'left' : 'right';
-  emit('update-stick', stickKey, {
-    ...currentStickConfig.value,
-    deadzone,
-  });
+  emit('update-stick', stickKey, { ...currentStickConfig.value, deadzone });
 };
 
 const updateStickSensitivity = (sensitivity: number) => {
   if (!props.controlId || !isStick.value || !currentStickConfig.value) return;
   const stickKey = props.controlId === 'left_stick' ? 'left' : 'right';
-  emit('update-stick', stickKey, {
-    ...currentStickConfig.value,
-    sensitivity,
-  });
+  emit('update-stick', stickKey, { ...currentStickConfig.value, sensitivity });
 };
 
 const updateStickCurve = (curve: StickCurve) => {
   if (!props.controlId || !isStick.value || !currentStickConfig.value) return;
   const stickKey = props.controlId === 'left_stick' ? 'left' : 'right';
-  emit('update-stick', stickKey, {
-    ...currentStickConfig.value,
-    curve,
-  });
+  emit('update-stick', stickKey, { ...currentStickConfig.value, curve });
 };
 
 const updateStickInvertY = (invert_y: boolean) => {
   if (!props.controlId || !isStick.value || !currentStickConfig.value) return;
   const stickKey = props.controlId === 'left_stick' ? 'left' : 'right';
-  emit('update-stick', stickKey, {
-    ...currentStickConfig.value,
-    invert_y,
-  });
+  emit('update-stick', stickKey, { ...currentStickConfig.value, invert_y });
 };
 
 const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: string) => {
   if (!props.controlId || !isStick.value || !currentStickConfig.value) return;
   const stickKey = props.controlId === 'left_stick' ? 'left' : 'right';
-  emit('update-stick', stickKey, {
-    ...currentStickConfig.value,
-    [dir]: val,
-  });
+  emit('update-stick', stickKey, { ...currentStickConfig.value, [dir]: val });
 };
 </script>
 
@@ -168,7 +149,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
     <!-- Header -->
     <div class="inspector-header">
       <div class="target-title-row">
-        <span class="target-tag">CONTROL</span>
+        <span class="target-tag">CONTROL INSPECTOR</span>
         <h2 class="target-name">
           {{ controlId ? controlId.toUpperCase().replace('_', ' ') : 'Select a Control' }}
         </h2>
@@ -177,18 +158,21 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
       <button
         v-if="controlId && !isStick"
         class="record-btn btn-cosmic"
-        title="Record keystroke or mouse click"
+        title="Record live keyboard key or mouse click"
         @click="emit('open-capture-modal', controlId)"
       >
-        <span class="rec-dot"></span>
+        <CosmicIcon name="record" size="12" class="rec-dot-icon" />
         <span>Record</span>
       </button>
     </div>
 
     <!-- Empty State -->
     <div v-if="!controlId" class="empty-state">
-      <div class="empty-icon">🎮</div>
-      <p class="empty-text">Click any button, trigger, or stick on the controller to edit its mapping.</p>
+      <div class="empty-icon-wrap">
+        <CosmicIcon name="gamepad" size="32" class="empty-icon" />
+      </div>
+      <p class="empty-title">No Input Selected</p>
+      <p class="empty-text">Click any button, trigger, or stick on the controller or the table to configure its mapping.</p>
     </div>
 
     <!-- ================================================================== -->
@@ -197,14 +181,14 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
     <div v-else-if="isStick && currentStickConfig" class="inspector-body">
       <!-- Stick Mode -->
       <div class="field-group">
-        <label class="field-label">Stick Function</label>
+        <label class="field-label">Stick Mode</label>
         <div class="pill-selector">
           <button
             class="pill-opt"
             :class="{ active: currentStickConfig.mode === 'digital_keys' }"
             @click="updateStickMode('digital_keys')"
           >
-            Digital Keys (WASD)
+            Digital WASD
           </button>
           <button
             class="pill-opt"
@@ -226,7 +210,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
       <!-- Deadzone Slider -->
       <div class="field-group">
         <div class="slider-header">
-          <label class="field-label">Deadzone</label>
+          <label class="field-label">Deadzone Radius</label>
           <span class="slider-value">{{ currentStickConfig.deadzone }}</span>
         </div>
         <input
@@ -241,10 +225,9 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 
       <!-- Mouse Mode Settings -->
       <template v-if="currentStickConfig.mode === 'mouse'">
-        <!-- Sensitivity -->
         <div class="field-group">
           <div class="slider-header">
-            <label class="field-label">Mouse Sensitivity</label>
+            <label class="field-label">Camera Sensitivity</label>
             <span class="slider-value">{{ (currentStickConfig.sensitivity || 1.35).toFixed(2) }}x</span>
           </div>
           <input
@@ -258,7 +241,6 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
           />
         </div>
 
-        <!-- Curve Selection -->
         <div class="field-group">
           <label class="field-label">Acceleration Curve</label>
           <div class="pill-selector">
@@ -286,9 +268,8 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
           </div>
         </div>
 
-        <!-- Invert Y -->
         <div class="field-group toggle-row">
-          <label class="field-label">Invert Y Axis</label>
+          <label class="field-label">Invert Y-Axis</label>
           <input
             type="checkbox"
             :checked="currentStickConfig.invert_y || false"
@@ -346,14 +327,14 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
     <div v-else class="inspector-body">
       <!-- Binding Type -->
       <div class="field-group">
-        <label class="field-label">Action Type</label>
+        <label class="field-label">Output Action</label>
         <div class="pill-selector">
           <button
             class="pill-opt"
             :class="{ active: currentButtonBinding.type === 'key' }"
             @click="setBindingType('key')"
           >
-            Keyboard Key
+            Keyboard
           </button>
           <button
             class="pill-opt"
@@ -367,7 +348,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
             :class="{ active: currentButtonBinding.type === 'mouse_scroll' }"
             @click="setBindingType('mouse_scroll')"
           >
-            Scroll Wheel
+            Scroll
           </button>
           <button
             class="pill-opt"
@@ -382,13 +363,16 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
       <!-- KEYBOARD KEY OPTION -->
       <template v-if="currentButtonBinding.type === 'key'">
         <div class="field-group">
-          <label class="field-label">Assigned Key</label>
-          <input
-            v-model="searchFilter"
-            type="text"
-            placeholder="Search key or modifier (e.g. Command, Space, F5)..."
-            class="search-input"
-          />
+          <label class="field-label">Select Key or Modifier</label>
+          <div class="search-input-wrap">
+            <CosmicIcon name="search" size="13" class="search-icon" />
+            <input
+              v-model="searchFilter"
+              type="text"
+              placeholder="Search key (e.g. Space, Command, F5)..."
+              class="search-input"
+            />
+          </div>
 
           <div class="key-list-box">
             <button
@@ -429,15 +413,14 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
               :class="{ active: currentButtonBinding.code === 'MOUSE_MIDDLE' }"
               @click="setMouseButton('MOUSE_MIDDLE')"
             >
-              Middle Click
+              Middle
             </button>
           </div>
         </div>
 
-        <!-- Trigger Threshold if L2 or R2 -->
         <div v-if="controlId === 'l2' || controlId === 'r2'" class="field-group">
           <div class="slider-header">
-            <label class="field-label">Trigger Sensitivity Threshold</label>
+            <label class="field-label">Analog Activation Threshold</label>
             <span class="slider-value">{{ currentButtonBinding.threshold ?? 40 }}</span>
           </div>
           <input
@@ -475,7 +458,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 
         <div class="field-group">
           <div class="slider-header">
-            <label class="field-label">Repeat Rate</label>
+            <label class="field-label">Repeat Interval</label>
             <span class="slider-value">{{ currentButtonBinding.repeat_ms || 120 }} ms</span>
           </div>
           <input
@@ -499,7 +482,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 18px;
+  padding: 16px;
   position: relative;
   z-index: 10;
   border-radius: 16px;
@@ -510,9 +493,9 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(147, 197, 253, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .target-title-row {
@@ -530,7 +513,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 }
 
 .target-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #fff;
 }
@@ -540,12 +523,8 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   font-size: 11px;
 }
 
-.rec-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f43f5e;
-  box-shadow: 0 0 6px #f43f5e;
+.rec-dot-icon {
+  color: #f43f5e;
 }
 
 .empty-state {
@@ -555,18 +534,33 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 12px;
+  gap: 10px;
+  color: var(--text-muted);
+  padding: 20px;
+}
+
+.empty-icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-muted);
 }
 
-.empty-icon {
-  font-size: 36px;
-  opacity: 0.6;
+.empty-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
 }
 
 .empty-text {
-  font-size: 12px;
-  max-width: 200px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .inspector-body {
@@ -574,7 +568,8 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+  padding-right: 2px;
 }
 
 .field-group {
@@ -584,7 +579,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 }
 
 .field-label {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -592,7 +587,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 .pill-selector {
   display: flex;
   background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(147, 197, 253, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   padding: 2px;
   gap: 2px;
@@ -604,13 +599,14 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   padding: 5px 6px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  text-align: center;
 }
 
 .pill-opt:hover:not(.active) {
@@ -618,9 +614,10 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 }
 
 .pill-opt.active {
-  background: rgba(56, 189, 248, 0.2);
+  background: rgba(56, 189, 248, 0.22);
   color: #fff;
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
 }
 
 .slider-header {
@@ -640,7 +637,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   -webkit-appearance: none;
   width: 100%;
   height: 5px;
-  background: rgba(30, 41, 59, 0.8);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
   outline: none;
 }
@@ -673,20 +670,28 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   cursor: pointer;
 }
 
-.search-input {
+.search-input-wrap {
+  display: flex;
+  align-items: center;
   background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(147, 197, 253, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  padding: 7px 10px;
+  padding: 6px 10px;
+  gap: 8px;
+}
+
+.search-icon {
+  color: var(--text-muted);
+}
+
+.search-input {
+  background: transparent;
+  border: none;
+  outline: none;
   color: #fff;
   font-size: 11.5px;
   font-family: var(--font-sans);
-  outline: none;
-  transition: border-color 0.2s ease;
-}
-
-.search-input:focus {
-  border-color: var(--accent-cyan);
+  width: 100%;
 }
 
 .key-list-box {
@@ -703,7 +708,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(255, 255, 255, 0.035);
   border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text-secondary);
@@ -713,24 +718,24 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 }
 
 .key-option-row:hover {
-  background: rgba(56, 189, 248, 0.1);
+  background: rgba(56, 189, 248, 0.12);
   color: #fff;
 }
 
 .key-option-row.selected {
-  background: rgba(56, 189, 248, 0.18);
-  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.5);
   color: #fff;
 }
 
 .key-badge {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
 }
 
 .key-code-sub {
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 9px;
   color: var(--text-muted);
 }
 
@@ -746,7 +751,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   align-items: center;
   justify-content: space-between;
   background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(147, 197, 253, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   padding: 5px 8px;
 }
@@ -761,7 +766,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 .dir-input {
   width: 48px;
   background: transparent;
-  border: 1px solid rgba(147, 197, 253, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 4px;
   color: #fff;
   font-family: var(--font-mono);

@@ -76,3 +76,4 @@ jobs:
       - name: Cargo check Rust backend
         working-directory: ./app/src-tauri
         run: cargo check --verbose
+

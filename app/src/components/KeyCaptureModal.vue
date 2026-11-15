@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import type { ButtonBinding, ControllerControlId } from '../types/keymap';
+import CosmicIcon from './CosmicIcon.vue';
 
 defineProps<{
   controlId: ControllerControlId;
@@ -44,16 +45,16 @@ const handleKeyDown = (e: KeyboardEvent) => {
     label = 'Delete / Backspace';
   } else if (e.code === 'MetaLeft' || e.code === 'MetaRight') {
     codeStr = 'KEY_LEFT_GUI';
-    label = '⌘ Command';
+    label = 'Command (Cmd)';
   } else if (e.code === 'AltLeft' || e.code === 'AltRight') {
     codeStr = 'KEY_LEFT_ALT';
-    label = '⌥ Option';
+    label = 'Option (Alt)';
   } else if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
     codeStr = 'KEY_LEFT_CTRL';
-    label = '⌃ Control';
+    label = 'Control (Ctrl)';
   } else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     codeStr = 'KEY_LEFT_SHIFT';
-    label = '⇧ Shift';
+    label = 'Shift';
   } else if (e.code.startsWith('Key')) {
     const char = e.code.replace('Key', '').toLowerCase();
     codeStr = char;
@@ -67,16 +68,16 @@ const handleKeyDown = (e: KeyboardEvent) => {
     label = e.code;
   } else if (e.code === 'ArrowUp') {
     codeStr = 'KEY_UP_ARROW';
-    label = '↑ Arrow Up';
+    label = 'Arrow Up';
   } else if (e.code === 'ArrowDown') {
     codeStr = 'KEY_DOWN_ARROW';
-    label = '↓ Arrow Down';
+    label = 'Arrow Down';
   } else if (e.code === 'ArrowLeft') {
     codeStr = 'KEY_LEFT_ARROW';
-    label = '← Arrow Left';
+    label = 'Arrow Left';
   } else if (e.code === 'ArrowRight') {
     codeStr = 'KEY_RIGHT_ARROW';
-    label = '→ Arrow Right';
+    label = 'Arrow Right';
   } else {
     codeStr = e.key.toLowerCase();
     label = e.key;
@@ -90,7 +91,6 @@ const handleKeyDown = (e: KeyboardEvent) => {
 };
 
 const handleMouseDown = (e: MouseEvent) => {
-  // Prevent modal background clicks from registering as capture
   const target = e.target as HTMLElement;
   if (target.closest('.modal-actions') || target.closest('.close-btn')) {
     return;
@@ -159,22 +159,23 @@ onUnmounted(() => {
 
 <template>
   <div class="capture-backdrop" @click.self="emit('close')">
-    <div class="capture-card glass-panel">
+    <div class="capture-card glass-panel-elevated">
       <div class="modal-header">
         <div class="modal-title-row">
           <span class="pulsar-dot"></span>
           <h3 class="modal-title">Live Input Capture</h3>
         </div>
-        <button class="close-btn" @click="emit('close')">✕</button>
+        <button class="close-btn" @click="emit('close')">
+          <CosmicIcon name="x" size="14" />
+        </button>
       </div>
 
       <p class="modal-desc">
-        Binding for target control: <strong class="target-name">{{ controlId.toUpperCase() }}</strong>
+        Mapping input for: <strong class="target-name">{{ controlId.toUpperCase().replace('_', ' ') }}</strong>
       </p>
 
-      <!-- Capture Visualizer -->
+      <!-- Visual Capture Area -->
       <div class="capture-visual-box">
-        <div class="pulse-ring"></div>
         <div class="input-display-badge">
           {{ capturedLabel }}
         </div>
@@ -193,7 +194,8 @@ onUnmounted(() => {
           :disabled="!capturedBinding"
           @click="confirmBinding"
         >
-          Apply Binding
+          <CosmicIcon name="check" size="12" />
+          <span>Apply Binding</span>
         </button>
       </div>
     </div>
@@ -204,30 +206,29 @@ onUnmounted(() => {
 .capture-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(5, 6, 13, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(3, 5, 10, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 999;
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .capture-card {
   width: 440px;
   padding: 24px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 189, 248, 0.2);
   border-radius: 18px;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .modal-title-row {
@@ -241,12 +242,12 @@ onUnmounted(() => {
   height: 10px;
   border-radius: 50%;
   background: var(--accent-cyan);
-  box-shadow: 0 0 10px var(--accent-cyan);
+  box-shadow: 0 0 12px var(--accent-cyan);
   animation: pulseGlow 1.8s infinite;
 }
 
 .modal-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #fff;
 }
@@ -255,18 +256,19 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 14px;
   cursor: pointer;
   padding: 4px;
-  transition: color 0.2s ease;
+  border-radius: 6px;
+  transition: all 0.2s ease;
 }
 
 .close-btn:hover {
   color: #fff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .modal-desc {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-secondary);
   margin-bottom: 20px;
 }
@@ -278,28 +280,28 @@ onUnmounted(() => {
 
 .capture-visual-box {
   position: relative;
-  height: 160px;
+  height: 150px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   border-radius: 14px;
-  background: rgba(10, 15, 29, 0.7);
-  border: 1px dashed rgba(147, 197, 253, 0.25);
-  margin-bottom: 24px;
-  overflow: hidden;
+  background: rgba(10, 15, 29, 0.75);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  margin-bottom: 20px;
+  padding: 16px;
 }
 
 .input-display-badge {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #ffffff;
-  background: rgba(56, 189, 248, 0.15);
-  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.5);
   padding: 10px 20px;
   border-radius: 10px;
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.3);
   margin-bottom: 12px;
   max-width: 90%;
   text-align: center;
@@ -309,18 +311,17 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-muted);
   text-align: center;
-  max-width: 80%;
 }
 
 .modal-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.96); }
+  from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
 }
 </style>

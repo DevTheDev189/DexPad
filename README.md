@@ -183,3 +183,4 @@ npm run tauri build
 
 ## 📄 License
 MIT License. Free and open source for all makers, gamers, and developers.
+

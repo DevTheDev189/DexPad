@@ -1,0 +1,78 @@
+name: Build & Release Nimbus Cosmic Bridge
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-macos-universal:
+    name: Build macOS Universal DMG
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'app/package-lock.json'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Install frontend dependencies
+        working-directory: ./app
+        run: npm ci || npm install
+
+      - name: Build macOS Universal App & DMG
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./app
+          args: --target universal-apple-darwin
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nimbus-macos-universal
+          path: |
+            app/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            app/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
+
+  check-windows-build:
+    name: Verify Windows Build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        working-directory: ./app
+        run: npm ci || npm install
+
+      - name: Build Vue frontend
+        working-directory: ./app
+        run: npm run build
+
+      - name: Cargo check Rust backend
+        working-directory: ./app/src-tauri
+        run: cargo check --verbose

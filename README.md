@@ -15,7 +15,7 @@
 
 ---
 
-## Super Simple 3-Step Setup (For Non-Techies)
+## Get Started: Super Simple 3-Step Setup (For Non-Techies)
 
 You do not need programming knowledge or command-line tools to use DexPad:
 
@@ -176,17 +176,33 @@ The compiled release installer is located in `app/src-tauri/target/release/bundl
 
 ## 3D Printable Enclosure
 
-The `case_3d/` directory contains complete CAD source files and 3D print assets for housing your Pico 2 W dongle:
+<div align="center">
 
-- `pico2w_case_top.stl` & `pico2w_case_bottom.stl` — Minimalist modern case featuring 4 internal solid alignment friction pegs (zero fragile clips, zero outer holes) and the debossed stepped DexPad logo.
-- `pico2w_case_top_goth.stl` & `pico2w_case_bottom_goth.stl` — Gothic architectural pattern case with venting.
-- CAD formats: `.step`, `.3mf`, and FreeCAD `.FCStd`.
+![DexPad 3D Enclosure Render](docs/dexpad_case_render.png)
 
-**Recommended Print Settings:**
-- **Material:** PETG or PLA
-- **Layer Height:** 0.16mm or 0.20mm
-- **Infill:** 20% Gyroid
-- **Supports:** None (designed for bridge-free printing)
+</div>
+
+The `case_3d/` directory contains complete CAD source files and ready-to-slice 3D print models tailored specifically for the Raspberry Pi Pico 2 W (and Pico W) hardware dongle:
+
+- `pico2w_case_top.stl` & `pico2w_case_bottom.stl` — Minimalist enclosure featuring 4 internal self-centering friction pins, zero fragile snap clips, zero exterior fastener holes, and the debossed stepped DexPad logo.
+- Source formats included: `.step`, `.3mf`, and editable FreeCAD `.FCStd` project file (`pico2w_enclosure.FCStd`).
+
+### Recommended 3D Print Settings
+
+| Setting | Recommended Value | Notes |
+| :--- | :--- | :--- |
+| **Material** | **PETG** or **PLA** | PETG is recommended for high layer adhesion and pin durability |
+| **Layer Height** | **0.16mm** (or 0.20mm) | 0.16mm yields crisp debossed logo relief and accurate pin tolerances |
+| **Infill** | **20% Gyroid** or Grid | Provides balanced rigidity |
+| **Walls / Perimeters** | **3 to 4 walls** | Ensures alignment pins and sockets print 100% solid |
+| **Print Orientation** | Flat on outer faces | Top shell face-down (logo on bed), bottom shell flat face-down |
+| **Supports** | **None** | Fully optimized for 100% bridge-free and support-free printing |
+
+### Assembly Guide
+
+1. **Insert Board**: Place your Raspberry Pi Pico 2 W (or Pico W) into the bottom case shell. Align the 4 PCB mounting holes over the 4 corner alignment standoffs. The Micro-USB port faces outward through the front cutout.
+2. **Align Shells**: Position the top shell directly over the bottom shell so the top mating sockets meet the bottom alignment pins.
+3. **Press to Lock**: Firmly press the two halves together between your fingers. The internal friction pegs slide into their chamfered mating sockets to create a secure, rattle-free seal without any screws or external clips.
 
 ---
 

@@ -276,6 +276,7 @@ def create_enclosure(doc=None, export_files=True, output_dir=r"c:\Users\dwinslow
     cyl2 = Part.makeCylinder(cap_r, lower_depth + 0.1, FreeCAD.Vector(cap_w/2.0 - cap_r, 0, 0), FreeCAD.Vector(0,0,1))
     lower_part = box_cap.fuse(cyl1).fuse(cyl2)
     lower_part.rotate(FreeCAD.Vector(0,0,0), FreeCAD.Vector(0,0,1), 45)
+    lower_part.rotate(FreeCAD.Vector(0,0,0), FreeCAD.Vector(0,0,1), 180)  # Rotated 180 facing Micro-USB port
     lower_part.translate(FreeCAD.Vector(outer_wid / 2.0, 20.0, z_floor - lower_depth))
 
     # B. TOP PART: The contoured crossing stroke (MORE RECESSED = 0.55 mm)
@@ -310,6 +311,7 @@ def create_enclosure(doc=None, export_files=True, output_dir=r"c:\Users\dwinslow
     top_stroke_face = Part.Face(wire_stroke)
     top_depth = 0.55  # DEEPER (0.55 mm) -> Flipped per user instruction!
     top_part = top_stroke_face.extrude(FreeCAD.Vector(0, 0, top_depth + 0.1))
+    top_part.rotate(FreeCAD.Vector(0,0,0), FreeCAD.Vector(0,0,1), 180)  # Rotated 180 facing Micro-USB port
     top_part.translate(FreeCAD.Vector(outer_wid / 2.0, 20.0, z_floor - top_depth))
 
     # Cut both from top shell

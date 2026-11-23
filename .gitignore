@@ -44,5 +44,10 @@ PS5_Renders/
 *PERSONAL_goth*
 *goth*
 
+# Temporary render assets
+scripts/render_enclosure_temp.html
+scripts/three.min.js
+
+
 
 

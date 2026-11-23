@@ -140,43 +140,36 @@ def create_enclosure(doc=None, export_files=True, output_dir=r"c:\Users\dwinslow
     inner_cavity.translate(FreeCAD.Vector(wall_thk, wall_thk, floor_thk))
     bottom_shell = outer_box_bottom.cut(inner_cavity)
 
-    # 4 Corner PCB Rest Ledges
-    ledge_size = 3.2
-    ledge_h = under_pcb_clearance
-    ledges = [
-        Part.makeBox(ledge_size, ledge_size, ledge_h),
-        Part.makeBox(ledge_size, ledge_size, ledge_h),
-        Part.makeBox(ledge_size, ledge_size, ledge_h),
-        Part.makeBox(ledge_size, ledge_size, ledge_h)
+    # -------------------------------------------------------------
+    # 4 CORNER PCB REST LEDGES & SOLID ALIGNMENT PEGS (ZERO CLIPS / ZERO OUTER HOLES)
+    # -------------------------------------------------------------
+    ledge_size = 3.5
+    ledge_h = under_pcb_clearance # 1.2 mm
+    
+    # Pico 2 W standard mounting hole centers (X, Y)
+    hole_pts = [
+        (pcb_origin_x + 2.0, pcb_origin_y + 2.0),
+        (pcb_origin_x + pcb_wid - 2.0, pcb_origin_y + 2.0),
+        (pcb_origin_x + 2.0, pcb_origin_y + pcb_len - 2.0),
+        (pcb_origin_x + pcb_wid - 2.0, pcb_origin_y + pcb_len - 2.0),
     ]
-    ledges[0].translate(FreeCAD.Vector(pcb_origin_x, pcb_origin_y, floor_thk))
-    ledges[1].translate(FreeCAD.Vector(pcb_origin_x + pcb_wid - ledge_size, pcb_origin_y, floor_thk))
-    ledges[2].translate(FreeCAD.Vector(pcb_origin_x, pcb_origin_y + pcb_len - ledge_size, floor_thk))
-    ledges[3].translate(FreeCAD.Vector(pcb_origin_x + pcb_wid - ledge_size, pcb_origin_y + pcb_len - ledge_size, floor_thk))
 
-    for l in ledges:
-        bottom_shell = bottom_shell.fuse(l)
-
-    # Snap-fit Female Catch Recesses (4 slots in side walls, exact compact height)
-    snap_w = 4.2
-    snap_h = 1.0
-    snap_depth = 0.5
-    snap_y1 = pcb_origin_y + 12.0
-    snap_y2 = pcb_origin_y + pcb_len - 12.0
-    # Placed 0.6 mm below parting line (Z = bottom_height)
-    snap_z = bottom_height - 0.6 - snap_h  # Z = 2.7 mm
-
-    s_left1 = Part.makeBox(snap_depth + 0.1, snap_w, snap_h)
-    s_left1.translate(FreeCAD.Vector(wall_thk - snap_depth, snap_y1 - snap_w/2.0, snap_z))
-    s_left2 = Part.makeBox(snap_depth + 0.1, snap_w, snap_h)
-    s_left2.translate(FreeCAD.Vector(wall_thk - snap_depth, snap_y2 - snap_w/2.0, snap_z))
-
-    s_right1 = Part.makeBox(snap_depth + 0.1, snap_w, snap_h)
-    s_right1.translate(FreeCAD.Vector(outer_wid - wall_thk - 0.1, snap_y1 - snap_w/2.0, snap_z))
-    s_right2 = Part.makeBox(snap_depth + 0.1, snap_w, snap_h)
-    s_right2.translate(FreeCAD.Vector(outer_wid - wall_thk - 0.1, snap_y2 - snap_w/2.0, snap_z))
-
-    bottom_shell = bottom_shell.cut(s_left1).cut(s_left2).cut(s_right1).cut(s_right2)
+    for hx, hy in hole_pts:
+        # Ledge block
+        lb = Part.makeBox(ledge_size, ledge_size, ledge_h)
+        lb.translate(FreeCAD.Vector(hx - ledge_size/2.0, hy - ledge_size/2.0, floor_thk))
+        bottom_shell = bottom_shell.fuse(lb)
+        
+        # Solid Alignment Peg: passes through Pico 2.1mm mounting hole and enters top shell socket
+        peg_r = 0.95  # 1.9 mm dia (fits 2.1mm hole cleanly)
+        peg_base_z = floor_thk + ledge_h  # 2.7 mm
+        peg_total_h = (bottom_height - peg_base_z) + 1.8  # 1.8 mm past parting line into top half
+        
+        # Cylindrical body + self-centering conical lead-in tip
+        peg_cyl = Part.makeCylinder(peg_r, peg_total_h - 0.5, FreeCAD.Vector(hx, hy, peg_base_z), FreeCAD.Vector(0,0,1))
+        peg_cone = Part.makeCone(peg_r, 0.5, 0.5, FreeCAD.Vector(hx, hy, peg_base_z + peg_total_h - 0.5), FreeCAD.Vector(0,0,1))
+        peg = peg_cyl.fuse(peg_cone)
+        bottom_shell = bottom_shell.fuse(peg)
 
     # Cut lower half of trapezoidal Micro-USB port
     cutter_bottom = make_microusb_cutter(bottom_height)
@@ -274,8 +267,71 @@ def create_enclosure(doc=None, export_files=True, output_dir=r"c:\Users\dwinslow
 
     top_shell = top_shell.cut(led_halo).cut(boot_ring)
 
-    # Top deck is kept smooth and flat with the camera-esque dished wells
-    # (Speed flutes removed per user request for a clean, minimalist flat deck)
+    # -------------------------------------------------------------
+    # DEXPAD EXACT CURVED LOGO DEBOSS WITH STEPPED 3D OVERLAP
+    # -------------------------------------------------------------
+    # User requirement:
+    # 1. Exact smooth curve of our logo (not pill-looking boxes).
+    # 2. Stepped 3D detail of overlapping bit with the lower part indented deeper than the top part.
+    
+    logo_scale = 10.0 / 60.0  # Scale ~10.0 mm width
+
+    # A. LOWER PART: The 45-degree capsule
+    # In SVG: rect x="20" y="41" width="60" height="18" rx="9" rotate(45 50 50)
+    cap_w = 60.0 * logo_scale  # 10.0 mm
+    cap_h = 18.0 * logo_scale  # 3.0 mm
+    cap_r = cap_h / 2.0        # 1.5 mm
+    lower_depth = 0.55         # INDENTED DEEPER (0.55 mm)
+
+    box_cap = Part.makeBox(cap_w - 2.0*cap_r, cap_h, lower_depth + 0.1)
+    box_cap.translate(FreeCAD.Vector(-cap_w/2.0 + cap_r, -cap_r, 0))
+    cyl1 = Part.makeCylinder(cap_r, lower_depth + 0.1, FreeCAD.Vector(-cap_w/2.0 + cap_r, 0, 0), FreeCAD.Vector(0,0,1))
+    cyl2 = Part.makeCylinder(cap_r, lower_depth + 0.1, FreeCAD.Vector(cap_w/2.0 - cap_r, 0, 0), FreeCAD.Vector(0,0,1))
+    lower_part = box_cap.fuse(cyl1).fuse(cyl2)
+    lower_part.rotate(FreeCAD.Vector(0,0,0), FreeCAD.Vector(0,0,1), 45)
+    lower_part.translate(FreeCAD.Vector(outer_wid / 2.0, 20.0, z_floor - lower_depth))
+
+    # B. TOP PART: The contoured crossing stroke with exact SVG bezier curve
+    # In SVG: path d="M 65,21 C 69.4,25.4 69.4,32.6 65,37 L 57,45 L 45,57 L 37,65 C 32.6,69.4 25.4,69.4 21,65 C 16.6,60.6 16.6,53.4 21,49 L 29,41 Z"
+    # translate(0, 3)
+    def bezier_pt(p0, p1, p2, p3, t):
+        x = (1-t)**3 * p0[0] + 3*(1-t)**2*t * p1[0] + 3*(1-t)*t**2 * p2[0] + t**3 * p3[0]
+        y = (1-t)**3 * p0[1] + 3*(1-t)**2*t * p1[1] + 3*(1-t)*t**2 * p2[1] + t**3 * p3[1]
+        return (x, y)
+
+    pts_svg = []
+    # Bezier 1: (65,21) -> (65,37)
+    for i in range(12):
+        t = i / 11.0
+        pts_svg.append(bezier_pt((65,21), (69.4,25.4), (69.4,32.6), (65,37), t))
+    pts_svg.append((57, 45))
+    pts_svg.append((45, 57))
+    pts_svg.append((37, 65))
+    # Bezier 2: (37,65) -> (21,65)
+    for i in range(1, 12):
+        t = i / 11.0
+        pts_svg.append(bezier_pt((37,65), (32.6,69.4), (25.4,69.4), (21,65), t))
+    # Bezier 3: (21,65) -> (21,49)
+    for i in range(1, 12):
+        t = i / 11.0
+        pts_svg.append(bezier_pt((21,65), (16.6,60.6), (16.6,53.4), (21,49), t))
+    pts_svg.append((29, 41))
+    pts_svg.append((65, 21))
+
+    pts_fc = []
+    for p in pts_svg:
+        x = (p[0] - 50.0) * logo_scale
+        y = ((p[1] + 3.0) - 50.0) * logo_scale
+        pts_fc.append(FreeCAD.Vector(x, y, 0))
+
+    wire_stroke = Part.Wire(Part.makePolygon(pts_fc))
+    top_stroke_face = Part.Face(wire_stroke)
+    top_depth = 0.25  # INDENTED SHALLOWER (0.25 mm) -> Stepped physical overlap of 0.30 mm!
+    top_part = top_stroke_face.extrude(FreeCAD.Vector(0, 0, top_depth + 0.1))
+    top_part.translate(FreeCAD.Vector(outer_wid / 2.0, 20.0, z_floor - top_depth))
+
+    # Cut both from top shell
+    top_shell = top_shell.cut(lower_part).cut(top_part)
 
     # Flank Grip Flutes on top half (connecting seamlessly with bottom half across the parting line)
     flutes_top = []
@@ -291,61 +347,18 @@ def create_enclosure(doc=None, export_files=True, output_dir=r"c:\Users\dwinslow
         top_shell = top_shell.cut(f)
 
     # -------------------------------------------------------------
-    # ANCHORED CANTILEVER SNAP-FIT CLIPS (Monolithically rooted to roof & sidewall)
+    # 4 CORNER ALIGNMENT PEG SOCKET BOSSES (ZERO CLIPS / ZERO OUTER HOLES)
     # -------------------------------------------------------------
-    tab_w = 4.0
-    tab_thk = 1.0
-    hook_proj = 0.45
-    z_root = 3.5
-    z_ceil = top_height - roof_thk  # 2.8 mm
-    z_catch = -0.7
-    z_barb = -1.2
-    z_tip = -2.4
-
-    # Profile for left tab in global X-Z coordinates:
-    pts_left = [
-        FreeCAD.Vector(wall_thk, 0, z_ceil),
-        FreeCAD.Vector(wall_thk, 0, z_root),
-        FreeCAD.Vector(wall_thk + snap_tol + tab_thk, 0, z_root),
-        FreeCAD.Vector(wall_thk + snap_tol + tab_thk, 0, z_barb + 0.6),
-        FreeCAD.Vector(wall_thk + snap_tol + tab_thk/2.0, 0, z_tip),  # center chisel tip
-        FreeCAD.Vector(wall_thk + snap_tol - hook_proj, 0, z_barb),   # hook barb point
-        FreeCAD.Vector(wall_thk + snap_tol - hook_proj, 0, z_catch),  # catch retention ledge
-        FreeCAD.Vector(wall_thk + snap_tol, 0, z_catch),              # outer stem
-        FreeCAD.Vector(wall_thk + snap_tol, 0, z_ceil),              # outer stem up to ceiling
-        FreeCAD.Vector(wall_thk, 0, z_ceil)                          # bridge to wall at ceiling
-    ]
-    wire_left = Part.Wire(Part.makePolygon(pts_left))
-    tab_proto_left = Part.Face(wire_left).extrude(FreeCAD.Vector(0, tab_w, 0))
-
-    pts_right = [
-        FreeCAD.Vector(outer_wid - wall_thk, 0, z_ceil),
-        FreeCAD.Vector(outer_wid - wall_thk, 0, z_root),
-        FreeCAD.Vector(outer_wid - wall_thk - snap_tol - tab_thk, 0, z_root),
-        FreeCAD.Vector(outer_wid - wall_thk - snap_tol - tab_thk, 0, z_barb + 0.6),
-        FreeCAD.Vector(outer_wid - wall_thk - snap_tol - tab_thk/2.0, 0, z_tip),
-        FreeCAD.Vector(outer_wid - wall_thk - snap_tol + hook_proj, 0, z_barb),
-        FreeCAD.Vector(outer_wid - wall_thk - snap_tol + hook_proj, 0, z_catch),
-        FreeCAD.Vector(outer_wid - wall_thk - snap_tol, 0, z_catch),
-        FreeCAD.Vector(outer_wid - wall_thk - snap_tol, 0, z_ceil),
-        FreeCAD.Vector(outer_wid - wall_thk, 0, z_ceil)
-    ]
-    wire_right = Part.Wire(Part.makePolygon(pts_right))
-    tab_proto_right = Part.Face(wire_right).extrude(FreeCAD.Vector(0, tab_w, 0))
-
-    t_left1 = tab_proto_left.copy()
-    t_left1.translate(FreeCAD.Vector(0, snap_y1 - tab_w/2.0, 0))
-
-    t_left2 = tab_proto_left.copy()
-    t_left2.translate(FreeCAD.Vector(0, snap_y2 - tab_w/2.0, 0))
-
-    t_right1 = tab_proto_right.copy()
-    t_right1.translate(FreeCAD.Vector(0, snap_y1 - tab_w/2.0, 0))
-
-    t_right2 = tab_proto_right.copy()
-    t_right2.translate(FreeCAD.Vector(0, snap_y2 - tab_w/2.0, 0))
-
-    top_shell = top_shell.fuse(t_left1).fuse(t_left2).fuse(t_right1).fuse(t_right2)
+    # Sockets receive the 4 solid alignment pegs from the bottom half for a clean friction fit
+    sock_r = 1.15  # 2.3 mm dia (0.20 mm radial clearance for smooth snug fit)
+    boss_r = 2.4
+    boss_h = 2.2
+    
+    for hx, hy in hole_pts:
+        boss = Part.makeCylinder(boss_r, boss_h, FreeCAD.Vector(hx, hy, 0), FreeCAD.Vector(0,0,1))
+        hole = Part.makeCylinder(sock_r, boss_h + 0.2, FreeCAD.Vector(hx, hy, -0.1), FreeCAD.Vector(0,0,1))
+        sock_boss = boss.cut(hole)
+        top_shell = top_shell.fuse(sock_boss)
 
     # -------------------------------------------------------------
     # 3. ADD OBJECTS TO FREECAD DOCUMENT (SIDE-BY-SIDE DISPLAY)

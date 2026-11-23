@@ -34,6 +34,7 @@ Thumbs.db
 .agents/
 *.glb
 *.zip
+*.FCBak
 Gemini_Generated_Image*
 61vh2++sAhL*
 OLD_IMPLEMENTATION_PLAN.md

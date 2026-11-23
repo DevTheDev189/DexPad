@@ -1,7 +1,27 @@
+<div align="center">
+
+![DexPad Hero Banner](docs/dexpad_hero_banner.png)
+
 # DexPad 🎮⚡
 
-> **Universal Zero-Latency Controller-to-Keyboard/Mouse Bridge for macOS & Windows**  
-> Transform any modern Bluetooth controller into native USB keyboard and mouse inputs at the hardware level—bypassing macOS's lack of X-Input with zero drivers, zero kexts, and zero background daemons.
+**Universal Zero-Latency Controller-to-Keyboard/Mouse Bridge for macOS & Windows**  
+*Transform any modern Bluetooth gamepad into native USB keyboard and mouse inputs at the hardware level—bypassing macOS's lack of X-Input with zero drivers, zero kexts, and zero background daemons.*
+
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Hardware: RP2350 / RP2040](https://img.shields.io/badge/Hardware-Pico_2_W_%2F_ESP32-38bdf8.svg)](https://www.raspberrypi.com/)
+[![App: Tauri v2 + Vue 3](https://img.shields.io/badge/Desktop-Tauri_v2_%2B_Vue_3-6366f1.svg)](https://tauri.app/)
+
+</div>
+
+---
+
+## 🚀 Super Simple 3-Step Setup (For Non-Techies)
+
+You don't need any programming skills or command-line tools to use DexPad!
+
+1. **Plug in your Pico**: Hold down the white **BOOTSEL** button on your **Raspberry Pi Pico 2 W** (or Pico W) and plug it into your Mac or PC using a standard USB-C cable.
+2. **Open DexPad**: Launch the DexPad app. DexPad will automatically detect your Pico and ask: *"Blank Pico detected! Would you like to flash DexPad firmware?"* Click **"Flash DexPad Firmware"**. The app flashes the board in 2 seconds and reboots it into controller bridge mode.
+3. **Pair & Play**: Put your controller into Bluetooth pairing mode (**PS + Share** on PlayStation, or the **Pair button** on Xbox / Switch Pro / 8BitDo). The dongle auto-connects, vibrates your controller, and you're ready to game!
 
 ---
 
@@ -132,8 +152,8 @@ The DexPad dongle will automatically negotiate and save the pairing keys to onbo
 #### Development Run
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/dexpad.git
-cd dexpad
+git clone https://github.com/DevTheDev189/DexPad.git
+cd DexPad
 
 # Navigate to desktop app directory
 cd app
@@ -158,7 +178,7 @@ The compiled release installer will be located in `app/src-tauri/target/release/
 
 The `case_3d/` directory contains complete CAD source files and 3D print assets for housing your Pico 2 W dongle:
 
-- `pico2w_case_top.stl` & `pico2w_case_bottom.stl` — Minimalist modern snap-fit case.
+- `pico2w_case_top.stl` & `pico2w_case_bottom.stl` — Minimalist modern case featuring 4 internal solid alignment friction pegs (zero fragile clips, zero outer holes) and the debossed stepped DexPad logo.
 - `pico2w_case_top_goth.stl` & `pico2w_case_bottom_goth.stl` — Gothic architectural pattern case with venting.
 - CAD formats: `.step`, `.3mf`, and FreeCAD `.FCStd`.
 
@@ -247,5 +267,5 @@ DexPad communicates with the hardware dongle using newline-delimited JSON (NDJSO
 
 ## 📄 License
 
-This project is open-source under the [MIT License](LICENSE).  
-Feel free to modify, build your own custom dongles, and share your game profiles!
+This project is open-source under the [Apache License 2.0](LICENSE).  
+Copyright © 2026 Deven Winslow (DevTheDev189). Feel free to modify, build your own custom dongles, and share your game profiles!

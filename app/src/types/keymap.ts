@@ -1,6 +1,6 @@
 export type StickMode = 'digital_keys' | 'mouse' | 'none';
 export type StickCurve = 'linear' | 'exponential' | 'aggressive';
-export type ButtonBindingType = 'key' | 'mouse_button' | 'mouse_scroll' | 'none';
+export type ButtonBindingType = 'key' | 'mouse_button' | 'mouse_scroll' | 'consumer_control' | 'gyro_aim' | 'none';
 
 export interface StickConfig {
   mode: StickMode;
@@ -25,6 +25,8 @@ export interface ButtonBinding {
   delta?: number;
   repeat_ms?: number;
   threshold?: number;
+  gyro_axis?: 'pitch_yaw' | 'yaw' | 'roll_pitch';
+  gyro_sensitivity?: number;
 }
 
 export interface Profile {
@@ -54,6 +56,7 @@ export interface SerialPortEntry {
   manufacturer?: string;
   product?: string;
   is_esp32: boolean;
+  is_pico?: boolean;
 }
 
 export interface InputTelemetry {
@@ -77,8 +80,11 @@ export type ControllerControlId =
   | 'r1'
   | 'l2'
   | 'r2'
+  | 'l4'
+  | 'r4'
   | 'l3'
   | 'r3'
+  | 'dpad'
   | 'dpad_up'
   | 'dpad_down'
   | 'dpad_left'
@@ -86,36 +92,50 @@ export type ControllerControlId =
   | 'menu'
   | 'options'
   | 'home'
+  | 'touchpad'
   | 'left_stick'
   | 'right_stick';
 
 export interface KeyOption {
   code: string;
   label: string;
-  category: 'mac' | 'alphanumeric' | 'navigation' | 'function' | 'mouse' | 'special';
+  category: 'mac' | 'alphanumeric' | 'navigation' | 'function' | 'mouse' | 'consumer' | 'special';
 }
 
 export const MAC_KEY_OPTIONS: KeyOption[] = [
-  // Special macOS keys
-  { code: 'KEY_LEFT_GUI', label: '⌘ Command (Left)', category: 'mac' },
-  { code: 'KEY_RIGHT_GUI', label: '⌘ Command (Right)', category: 'mac' },
-  { code: 'KEY_LEFT_ALT', label: '⌥ Option / Alt (Left)', category: 'mac' },
-  { code: 'KEY_RIGHT_ALT', label: '⌥ Option / Alt (Right)', category: 'mac' },
-  { code: 'KEY_LEFT_CTRL', label: '⌃ Control (Left)', category: 'mac' },
-  { code: 'KEY_RIGHT_CTRL', label: '⌃ Control (Right)', category: 'mac' },
-  { code: 'KEY_LEFT_SHIFT', label: '⇧ Shift (Left)', category: 'mac' },
-  { code: 'KEY_RIGHT_SHIFT', label: '⇧ Shift (Right)', category: 'mac' },
-  { code: 'KEY_SPACE', label: '␣ Space', category: 'navigation' },
-  { code: 'KEY_RETURN', label: '↵ Return / Enter', category: 'navigation' },
-  { code: 'KEY_ESC', label: '⎋ Escape', category: 'navigation' },
-  { code: 'KEY_TAB', label: '⇥ Tab', category: 'navigation' },
-  { code: 'KEY_BACKSPACE', label: '⌫ Delete / Backspace', category: 'navigation' },
+  // Special macOS modifier keys
+  { code: 'KEY_LEFT_GUI', label: 'Command (Left)', category: 'mac' },
+  { code: 'KEY_RIGHT_GUI', label: 'Command (Right)', category: 'mac' },
+  { code: 'KEY_LEFT_ALT', label: 'Option / Alt (Left)', category: 'mac' },
+  { code: 'KEY_RIGHT_ALT', label: 'Option / Alt (Right)', category: 'mac' },
+  { code: 'KEY_LEFT_CTRL', label: 'Control (Left)', category: 'mac' },
+  { code: 'KEY_RIGHT_CTRL', label: 'Control (Right)', category: 'mac' },
+  { code: 'KEY_LEFT_SHIFT', label: 'Shift (Left)', category: 'mac' },
+  { code: 'KEY_RIGHT_SHIFT', label: 'Shift (Right)', category: 'mac' },
+  { code: 'KEY_SPACE', label: 'Space', category: 'navigation' },
+  { code: 'KEY_RETURN', label: 'Return / Enter', category: 'navigation' },
+  { code: 'KEY_ESC', label: 'Escape', category: 'navigation' },
+  { code: 'KEY_TAB', label: 'Tab', category: 'navigation' },
+  { code: 'KEY_BACKSPACE', label: 'Delete / Backspace', category: 'navigation' },
+
+  // Consumer Media & Brightness Controls
+  { code: 'MEDIA_VOLUME_UP', label: 'Volume Up', category: 'consumer' },
+  { code: 'MEDIA_VOLUME_DOWN', label: 'Volume Down', category: 'consumer' },
+  { code: 'MEDIA_MUTE', label: 'Mute Audio', category: 'consumer' },
+  { code: 'MEDIA_PLAY_PAUSE', label: 'Play / Pause', category: 'consumer' },
+  { code: 'MEDIA_NEXT', label: 'Next Track', category: 'consumer' },
+  { code: 'MEDIA_PREV', label: 'Previous Track', category: 'consumer' },
+  { code: 'MEDIA_BRIGHTNESS_UP', label: 'Display Brightness Up', category: 'consumer' },
+  { code: 'MEDIA_BRIGHTNESS_DOWN', label: 'Display Brightness Down', category: 'consumer' },
+
+  // Gyro Aim Action
+  { code: 'GYRO_AIM', label: 'Hold for Gyro Precision Aim', category: 'special' },
 
   // Arrows
-  { code: 'KEY_UP_ARROW', label: '↑ Arrow Up', category: 'navigation' },
-  { code: 'KEY_DOWN_ARROW', label: '↓ Arrow Down', category: 'navigation' },
-  { code: 'KEY_LEFT_ARROW', label: '← Arrow Left', category: 'navigation' },
-  { code: 'KEY_RIGHT_ARROW', label: '→ Arrow Right', category: 'navigation' },
+  { code: 'KEY_UP_ARROW', label: 'Arrow Up', category: 'navigation' },
+  { code: 'KEY_DOWN_ARROW', label: 'Arrow Down', category: 'navigation' },
+  { code: 'KEY_LEFT_ARROW', label: 'Arrow Left', category: 'navigation' },
+  { code: 'KEY_RIGHT_ARROW', label: 'Arrow Right', category: 'navigation' },
 
   // Common Alphanumeric
   { code: 'w', label: 'W', category: 'alphanumeric' },
@@ -157,4 +177,3 @@ export const MAC_KEY_OPTIONS: KeyOption[] = [
   { code: 'SCROLL_UP', label: 'Mouse Scroll Wheel Up', category: 'mouse' },
   { code: 'SCROLL_DOWN', label: 'Mouse Scroll Wheel Down', category: 'mouse' },
 ];
-

@@ -1,199 +1,194 @@
-# IMPLEMENTATION_PLAN.md — Nimbus+ Cosmic Bridge
+# IMPLEMENTATION_PLAN.md — 8BitDo Ultimate 2C + Pico 2 W Sky Glass Ecosystem
 
-## 1. Project Overview
-An open-source, cross-platform hardware-and-software controller remapping ecosystem for macOS (with full local development support on Windows):
-- **Hardware Bridge (`firmware/`):** An ESP32-S3 dongle running Bluepad32 + TinyUSB Composite HID & CDC Serial. Connects wirelessly to a SteelSeries Nimbus+ controller via Bluetooth and presents itself to macOS as a native USB keyboard and mouse—eliminating macOS DriverKit entitlements and background accessibility daemons.
-- **Desktop Configurator (`app/`):** A sleek Tauri v2 + Rust + Vue 3 application styled with a deep-space **Galaxy Glassmorphic + Liquid Metaball** aesthetic (light blue, cobalt, indigo, violet, and obsidian black). Sends profile configurations as newline-delimited JSON over USB CDC serial to the ESP32-S3, which persists them to Non-Volatile Storage (NVS).
-- **CI/CD (`.github/workflows/`):** Automated GitHub Actions workflow compiling universal macOS `.dmg` releases on `macos-latest` runners (and verifying Windows builds on `windows-latest`).
+## 1. Executive Summary & Hardware Vision
+A next-generation, high-performance controller remapping and hardware bridge ecosystem designed for macOS and Windows. 
+This build replaces the legacy prototype with a production-grade industrial design and modern software architecture:
+
+- **Target Controller:** **8BitDo Ultimate 2C Bluetooth (Blue)**
+  - Precision Hall Effect magnetic analog sticks (zero stick drift forever).
+  - Tactile microswitch bumpers and digital quick-throw triggers.
+  - Dedicated **L4 and R4** extra top shoulder bumpers.
+  - 6-Axis motion gyroscope (Switch Pro controller protocol).
+  - Dual linear rumble vibration motors.
+  - Authentic pastel Sky Blue & Cloud White two-tone colorway with soft Periwinkle accents.
+- **Hardware Bridge:** **Raspberry Pi Pico 2 W (RP2350)** / **Pico W (RP2040)**
+  - Infineon CYW43439 dual-band wireless chip supporting **both Bluetooth Classic (BR/EDR) and BLE**.
+  - High-performance dual-core processor with ample SRAM and XIP flash headroom.
+  - Native USB 1.1/2.0 OTG peripheral.
+  - Drag-and-drop `.uf2` firmware flashing via mass-storage bootloader (`reset_usb_boot`), eliminating COM port locking and physical button dependence.
+- **Enclosure & Interconnect:**
+  - JLC3DP SLA resin enclosure (LEDO 6060 / 9600 resin) with factory **Matte Sky Blue** spray-paint finish.
+  - Captive flexible 4-wire USB-C male pigtail soldered directly to underside test pads:
+    - `VBUS` (Pin 40) -> 5V (Red)
+    - `TP1` (Underside GND pad) -> GND (Black)
+    - `TP2` (Underside D- pad) -> D- (White)
+    - `TP3` (Underside D+ pad) -> D+ (Green)
+  - Mechanical Strain Relief: Internal 2mm nylon zip-tie collar pocket anchor + compression clamp rib protecting all solder joints from tension and bending.
+  - Snap-fit / M2 screw assembly with discrete 2mm BOOTSEL pinhole and light-pipe window for the onboard LED.
+- **Desktop Companion App:**
+  - Tauri v2 + Rust + Vue 3 + Three.js.
+  - **"Cerulean Sky Glass / Horizon Aero"** daylight aesthetic inspired by modern 2026 design systems (Apple visionOS, Linear, and Adobe Creative Cloud).
+  - Interactive Three.js PBR render of the 8BitDo Ultimate 2C with Front and Top camera views.
+  - Dynamic electric cyan glowing tracer ribbon connecting the active 3D controller button to its row in the mapping table.
+  - Floating pill-capsule mapping rows with keyboard, mouse, gyro aim, and **Consumer Control (media & brightness)** key bindings.
+  - App-aware auto-switching watching foreground windows to activate game-specific profiles automatically.
+  - One-click in-app `.uf2` firmware flasher.
 
 ---
 
-## 2. Repository Structure
+## 2. System Architecture & Repository Layout
+
 ```text
-nimbus-cosmic-bridge/
-├── IMPLEMENTATION_PLAN.md
-├── README.md
-├── .github/
-│   └── workflows/
-│       └── build-release.yml       # macOS Universal .dmg + Windows build checks
+Dexter_Controller_Project/
+├── IMPLEMENTATION_PLAN.md                  # This file
+├── OLD_IMPLEMENTATION_PLAN.md              # Archived prototype plan
+├── controller_cc_credits.txt               # 3D Model attribution (CC-BY 4.0 Sketchfab)
 ├── firmware/
-│   └── nimbus_bridge/
-│       └── nimbus_bridge.ino       # Refactored Bluepad32 + TinyUSB + ArduinoJson + Preferences (NVS)
+│   ├── pico_bridge/                        # Modern Pico SDK CMake Project
+│   │   ├── CMakeLists.txt                  # Dual-target build: pico2_w and pico_w
+│   │   ├── pico_sdk_import.cmake           # Official Pico SDK v2.3+ hook
+│   │   ├── include/
+│   │   │   ├── tusb_config.h               # TinyUSB Composite HID + CDC descriptors
+│   │   │   ├── bridge_types.h              # Profile, binding, and stick configurations
+│   │   │   ├── protocol.h                  # NDJSON serial command definitions
+│   │   │   ├── storage.h                   # Flash sector NVS persistence API
+│   │   │   └── gyro.h                      # 6-Axis motion processing & mouse aim
+│   │   └── src/
+│   │       ├── main.c                      # Core 0 event loop (TinyUSB + CDC commands)
+│   │       ├── controller.c                # Core 1 Bluepad32 Bluetooth host & mappings
+│   │       ├── storage.c                   # Safe flash execution (flash_safe_execute)
+│   │       ├── protocol.c                  # Fast streaming JSON parser/serializer
+│   │       └── gyro.c                      # Pitch/yaw sensor fusion & aim accumulation
+│   └── nimbus_bridge/                      # Archived ESP32-S3 Arduino sketch
 └── app/
-    ├── package.json
-    ├── vite.config.ts
-    ├── tsconfig.json
-    ├── index.html
+    ├── public/
+    │   └── models/
+    │       └── 8bitdo_ultimate_2c.glb      # Optimized ~6.1k triangle 8BitDo 2C 3D model
     ├── src/
-    │   ├── main.ts
-    │   ├── App.vue
     │   ├── assets/
-    │   │   └── theme.css           # Galaxy palette tokens, starfield keyframes, glass utilities
+    │   │   └── theme.css                   # Cerulean Sky Glass design tokens & aero blur
     │   ├── types/
-    │   │   └── keymap.ts           # TypeScript interfaces matching Rust & ESP32 JSON schema
+    │   │   ├── keymap.ts                   # Extended: L4, R4, Gyro, Media/Brightness keys
+    │   │   └── controllers.ts              # 8BitDo 2C node mappings & button coordinates
     │   ├── composables/
-    │   │   ├── useSerial.ts        # Tauri IPC wrappers for port discovery, connect, send/receive JSON
-    │   │   └── useProfiles.ts      # Local & device profile state management + default presets
+    │   │   ├── useSerial.ts                # Auto-connect daemon, NDJSON RPC, .uf2 trigger
+    │   │   ├── useProfiles.ts              # Profile manager & hardware flash sync
+    │   │   └── useAppWatcher.ts            # Frontend reactive hook for active app profile
     │   └── components/
-    │       ├── CosmicBackground.vue      # Parallax CSS starfield + reactive cursor/selection nebula orb
-    │       ├── MetaballDefs.vue          # Shared SVG <filter id="nebula-goo"> (feGaussianBlur + feColorMatrix)
-    │       ├── NimbusControllerSvg.vue   # 3-layer interactive SteelSeries Nimbus+ SVG (plasma + shell + controls)
-    │       ├── BindingInspector.vue      # Glassmorphic panel to bind keys, mouse clicks, scroll, or stick curves
-    │       ├── KeyCaptureModal.vue       # "Press any key or mouse button" listener overlay
-    │       └── ProfilePillBar.vue        # Liquid metaball tab switcher for saved profiles
+    │       ├── AmbientBackground.vue       # Abstract procedural volumetric sky & sunbeams
+    │       ├── HeaderBar.vue               # Profile pills, Nintendo/Xbox toggle, status dot
+    │       ├── Controller3DCanvas.vue      # Three.js 8BitDo 2C PBR viewer + tracer ribbon
+    │       ├── MappingTable.vue            # Floating pill-capsule mapping rows
+    │       ├── DpadConfigModal.vue         # 8-Way D-pad configuration dialog
+    │       ├── StickConfigModal.vue        # Deadzone, sensitivity, and curve visualizer
+    │       ├── FirmwareModal.vue           # 1-Click .uf2 firmware updater dialog
+    │       └── KeyCaptureModal.vue         # Keystroke, mouse, and media key recorder
     └── src-tauri/
-        ├── Cargo.toml
-        ├── tauri.conf.json
         └── src/
-            ├── main.rs
-            ├── lib.rs              # Window vibrancy setup (NSVisualEffectView on macOS, Mica/Acrylic on Win)
-            ├── serial.rs           # USB CDC port enumeration, background reader thread, JSON framing
-            └── models.rs           # Serde structs mirroring the ESP32 JSON profile schema
+            ├── lib.rs                      # Tauri command registration & window vibrancy
+            ├── models.rs                   # Serde data contracts for NDJSON messages
+            ├── serial.rs                   # Port enumeration, CDC auto-discovery, hotplug
+            ├── app_watcher.rs              # macOS NSWorkspace / Windows active app watcher
+            └── updater.rs                  # Mass-storage drive detector & .uf2 writer
 ```
 
 ---
 
-## 3. Shared JSON Over USB CDC Protocol
-Communication uses **115200 baud** newline-delimited JSON (`\n` terminated) over the ESP32-S3's native USB CDC port (`/dev/cu.usbmodem*` on macOS, `COM*` on Windows). Debug `dumpGamepad()` serial spam is completely removed so the serial channel remains clean for structured commands.
+## 3. Design System: "Cerulean Sky Glass"
 
-### 3.1 Host $\rightarrow$ ESP32-S3 Commands
-1. **Ping / Handshake:**
-   ```json
-   { "cmd": "PING" }
-   ```
-   *Response:* `{"status":"ok","device":"nimbus-s3-bridge","fw":"2.0.0","active_profile":0}`
+### Color Tokens
+- **Atmospheric Gradient:** Deep oceanic twilight to bright cerulean (`#0a1526` -> `#0284c7` -> `#38bdf8` -> `#f0f9ff`)
+- **Sunbeam Glow:** Warm solar brilliance (`rgba(254, 240, 138, 0.25)`)
+- **Glass Panel Surface:** Translucent cloud aerogel (`rgba(255, 255, 255, 0.45)` with `backdrop-filter: blur(32px) saturate(180%)`)
+- **Specular Border Rim:** 1px top directional light (`rgba(255, 255, 255, 0.85)` top edge fading to `rgba(56, 189, 248, 0.20)`)
+- **Primary Ink:** High-contrast deep slate (`#0f172a` on light cards, `#f8fafc` on dark accents)
+- **Secondary Ink:** Muted slate blue (`#334155` / `#64748b`)
+- **Interactive Halo:** Neon electric cyan (`#22d3ee` / `#38bdf8`) with box-shadow glow
+- **Tracer Ribbon:** Luminous curved cyan bezier curve (`#38bdf8` to `#22d3ee`) with soft blur aura
 
-2. **Apply & Save Profile (`WRITE_PROFILE`):**
-   ```json
-   {
-     "cmd": "WRITE_PROFILE",
-     "slot": 0,
-     "name": "Minecraft",
-     "sticks": {
-       "left": {
-         "mode": "digital_keys",
-         "deadzone": 180,
-         "up": "w",
-         "down": "s",
-         "left": "a",
-         "right": "d"
-       },
-       "right": {
-         "mode": "mouse",
-         "deadzone": 45,
-         "sensitivity": 1.35,
-         "curve": "exponential",
-         "invert_y": false
-       }
-     },
-     "buttons": {
-       "a": { "type": "key", "code": "KEY_SPACE" },
-       "b": { "type": "key", "code": "KEY_LEFT_SHIFT" },
-       "x": { "type": "key", "code": "q" },
-       "y": { "type": "key", "code": "e" },
-       "l1": { "type": "mouse_scroll", "delta": 1, "repeat_ms": 120 },
-       "r1": { "type": "mouse_scroll", "delta": -1, "repeat_ms": 120 },
-       "l2": { "type": "mouse_button", "code": "MOUSE_RIGHT", "threshold": 40 },
-       "r2": { "type": "mouse_button", "code": "MOUSE_LEFT", "threshold": 40 },
-       "l3": { "type": "key", "code": "KEY_LEFT_CTRL" },
-       "r3": { "type": "key", "code": "f" },
-       "dpad_up": { "type": "key", "code": "KEY_F5" },
-       "dpad_down": { "type": "key", "code": "KEY_F3" },
-       "dpad_left": { "type": "key", "code": "1" },
-       "dpad_right": { "type": "key", "code": "t" },
-       "menu": { "type": "key", "code": "KEY_ESC" },
-       "options": { "type": "key", "code": "KEY_RETURN" },
-       "home": { "type": "key", "code": "KEY_TAB" }
-     }
-   }
-   ```
-
-3. **Switch Active Slot (`SET_SLOT`):**
-   ```json
-   { "cmd": "SET_SLOT", "slot": 1 }
-   ```
-
-4. **Read Stored Profile (`GET_PROFILE`):**
-   ```json
-   { "cmd": "GET_PROFILE", "slot": 0 }
-   ```
-
-5. **Live Input Telemetry Toggle (`STREAM_INPUTS`):**
-   ```json
-   { "cmd": "STREAM_INPUTS", "enabled": true }
-   ```
-   *Streamed Frame (throttled to 30Hz when enabled):*
-   ```json
-   { "event": "INPUT", "buttons": 1, "dpad": 0, "lx": 0, "ly": -412, "rx": 120, "ry": -30, "l2": 0, "r2": 1023 }
-   ```
+### Typography Hierarchy (Geist Sans + Geist Mono)
+- **Interface Base:** `Geist Sans`, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+- **Data & Telemetry:** `Geist Mono`, "JetBrains Mono", monospace with tabular figures (`font-feature-settings: "tnum" 1`)
+- **Section Eyebrows:** 11px, font-weight 600, letter-spacing 0.08em, uppercase
+- **Button Titles:** 13.5px, font-weight 500, letter-spacing -0.01em
+- **Key Binding Chips:** 11.5px, font-weight 600, monospace, padding 4px 10px, rounded-md
 
 ---
 
-## 4. Visual & UI Architecture (Galaxy + Metaball Glassmorphism)
+## 4. Hardware & Firmware Specifications
 
-### 4.1 Color System (`app/src/assets/theme.css`)
-- `--bg-void: #05060d` (Deep space background)
-- `--bg-nebula-1: #0f172a` (Midnight blue)
-- `--bg-nebula-2: #1e1035` (Deep cosmic purple)
-- `--glass-surface: rgba(15, 20, 42, 0.48)`
-- `--glass-border: rgba(147, 197, 253, 0.18)`
-- `--accent-cyan: #38bdf8` (Light blue glow)
-- `--accent-cobalt: #3b82f6` (Electric blue)
-- `--accent-indigo: #6366f1` (Indigo core)
-- `--accent-violet: #8b5cf6` (Violet plasma)
-- `--accent-magenta: #c084fc` (Nebula highlight)
+### USB Composite Descriptors (TinyUSB)
+1. **HID Keyboard:** Standard 6-key rollover + modifier keys (Ctrl, Shift, Alt, Cmd/Win).
+2. **HID Mouse:** 125 Hz throttled sub-pixel mouse movement, 5 buttons, and vertical/horizontal scroll wheel.
+3. **HID Consumer Control:** macOS and Windows media controls:
+   - Volume Up (`0x00E9`), Volume Down (`0x00EA`), Mute (`0x00E2`)
+   - Play / Pause (`0x00CD`), Next Track (`0x00B5`), Previous Track (`0x00B6`)
+   - Brightness Increment (`0x006F`), Brightness Decrement (`0x0070`)
+4. **USB CDC Serial:** 115,200 baud NDJSON communication channel for configuration, telemetry streaming, and bootloader triggers.
 
-### 4.2 Cosmic & Metaball Effects
-1. **Starfield + Dynamic Nebula Spotlight (`CosmicBackground.vue`):**
-   - Two CSS radial-gradient / box-shadow star layers animating slowly with `transform: translate3d(...)` on GPU compositing layers.
-   - A large blurred nebula orb (`width: 480px; height: 480px; filter: blur(95px)`) positioned behind the controller SVG. Hovering or selecting any control on the SVG smoothly interpolates the orb's `(x, y)` coordinates and radial gradient colors (`cyan` $\rightarrow$ `indigo` $\rightarrow$ `violet`) directly behind that button.
-2. **SVG Liquid Metaball Layer (`MetaballDefs.vue` + `NimbusControllerSvg.vue`):**
-   - Define an SVG filter `<filter id="nebula-goo">` using `<feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />` followed by `<feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" result="goo" />`.
-   - Render glowing plasma circles for adjacent buttons (e.g., `A/B/X/Y` and `D-Pad`) inside a `<g filter="url(#nebula-goo)">` layer *beneath* the frosted glass controller shell so hover glows merge organically like liquid plasma while keeping button icons and keycap labels razor-sharp above.
-3. **Native Window Translucency (`window-vibrancy`):**
-   - On macOS: apply `NSVisualEffectMaterial::HudWindow` (or `UnderWindowBackground`) with `TitleBarStyle::Overlay` so traffic lights float cleanly over the starfield.
-   - On Windows (local dev): apply `apply_mica` / `apply_acrylic` fallback so glassmorphic panels look cohesive during Windows testing.
+### Flash Memory Layout
+- The top 64KB sector of Pico flash (`0x101F0000` on 2MB flash, or top sector on 4MB Pico 2 W) stores up to 8 JSON profile slots.
+- Writes are guarded by `flash_safe_execute()` to safely pause Core 1 and interrupts during the 20ms write cycle, preventing BTstack wireless crashes.
+
+### Hardware Gestures & Feedback
+- **Profile Switch Rumble:**
+  - Slot 0: 1 short pulse (100ms)
+  - Slot 1: 2 short pulses
+  - Slot 2: 3 short pulses
+  - Slot 3: 4 short pulses
+- **Hardware Shortcut:** `Home + D-Pad Left/Right` cycles profiles standalone without the desktop app open.
+- **Hold-to-Gyro Aim:** Binding any trigger or button (e.g. `L2`) to `GYRO_AIM` enables continuous 6-axis IMU mouse input while held.
 
 ---
 
-## 5. Step-by-Step Build Phases
+## 5. Phased Implementation Roadmap
 
-### Phase 1: Scaffold Tauri v2 + Rust + Vue App (Windows Local Dev Ready)
-1. Initialize the Tauri v2 + Vue 3 + TypeScript project inside `app/`.
-2. Add Rust dependencies in `app/src-tauri/Cargo.toml`:
-   - `tauri = { version = "2", features = ["macos-private-api"] }`
-   - `serialport = "4"`
-   - `serde = { version = "1", features = ["derive"] }`
-   - `serde_json = "1"`
-   - `window-vibrancy = "0.5"`
-3. Configure `tauri.conf.json` with transparent window support (`"transparent": true`, `"titleBarStyle": "Overlay"` on macOS, minimum dimensions `1120x740`).
-4. Verify `npm run tauri dev` compiles and launches cleanly on Windows.
+### Phase 1: Sky Glass Design System Overhaul (Desktop App)
+- [ ] Refactor `app/src/assets/theme.css` to the daylight Cerulean Sky Glass token palette.
+- [ ] Redesign `app/src/components/AmbientBackground.vue` into an abstract volumetric sky with procedural drifting cloud orbs and sunlight caustics.
+- [ ] Update `app/src/components/HeaderBar.vue` with centered profile pills, Sky Blue glowing active indicator, and Nintendo ↔ Xbox layout switcher.
+- [ ] Transform `app/src/components/MappingTable.vue` into floating pill capsules matching the reference mockup.
 
-### Phase 2: Build the Galaxy + Metaball Controller UI
-1. Create `theme.css` and `CosmicBackground.vue` with deep blue/indigo/violet/black gradients, twinkling CSS stars, and reactive hover glow tracking.
-2. Build `NimbusControllerSvg.vue` using the circular button geometry from `ControllerButtons.svg` as a starting template, expanding into a complete, sleek SteelSeries Nimbus+ vector layout with 19 clickable hit-zones (`A`, `B`, `X`, `Y`, `L1`, `R1`, `L2`, `R2`, `L3`, `R3`, `DPAD_UP/DOWN/LEFT/RIGHT`, `Menu`, `Options`, `Home`, `Left Stick`, `Right Stick`) and live keycap badges.
-3. Implement `ProfilePillBar.vue` with a sliding liquid metaball active indicator and preset starter templates (*Minecraft*, *Hollow Knight / 2D Platformer*, *Desktop Mouse Mode*).
-4. Build `BindingInspector.vue` and `KeyCaptureModal.vue` so clicking any control on the SVG lets the user either press a physical keyboard/mouse input to bind it or pick from a structured macOS keycode dropdown (including `Command`, `Option`, `Control`, `Shift`, `Space`, `F1–F12`, mouse clicks, scroll wheel, and stick curve/deadzone sliders).
+### Phase 2: 8BitDo Ultimate 2C 3D Model Integration
+- [ ] Load `app/public/models/8bitdo_ultimate_2c.glb` into `app/src/components/Controller3DCanvas.vue`.
+- [ ] Apply custom PBR materials:
+  - Pastel Sky Blue body shell (`#c5dcf7`).
+  - Cloud White underside (`#f8fafc`).
+  - Soft Periwinkle thumbsticks, D-pad, and face buttons (`#9cb8ed`).
+- [ ] Map all individual mesh nodes: `Main_LP`, `X,_Y_A_B_buttons`, `LP_Arrow`, `JoySticks_LP`, `LP_Button_R4.001`, `LP_Button_RT`, `LP_Button_RB`, `TopMiddleButton_LP`.
+- [ ] Implement raycast hover, click selection, and luminous cyan glowing outlines.
+- [ ] Implement dynamic camera transitions: **Front View** (ABXY, sticks, D-pad) and **Top View** (L1, R1, L2, R2, L4, R4).
+- [ ] Build the interactive electric cyan glowing bezier tracer ribbon connecting the clicked 3D button directly to the mapping table row.
 
-### Phase 3: Rust USB CDC Serial Backend (`serial.rs`)
-1. Implement `list_serial_ports()` filtering for ESP32-S3 USB CDC devices (VID `0x303A` / `usbmodem` / `COM` ports) while still allowing manual port selection.
-2. Spawn a dedicated background thread using `serialport::open` at `115200` baud with a `BufReader` reading newline-delimited JSON responses (`ACK`, `PROFILE_DATA`, and `INPUT` telemetry events) and emitting them to Vue via `app_handle.emit(...)`.
-3. Expose `#[tauri::command]` handlers: `get_ports`, `connect_port`, `disconnect_port`, `send_profile`, `switch_slot`, `request_profile`, and `set_input_stream`.
+### Phase 3: Data Models, Keymap Types & Remapping Engine
+- [ ] Extend `app/src/types/keymap.ts` and `controllers.ts`:
+  - Add `BTN_L4` and `BTN_R4`.
+  - Add `BIND_CONSUMER_CONTROL` (Volume, Mute, Play/Pause, Brightness).
+  - Add `BIND_GYRO_AIM`.
+  - Add `layout_mode: 'nintendo' | 'xbox'`.
+- [ ] Update default presets:
+  - **Minecraft:** Left stick WASD, Right stick Mouse, L4 Sprint, R4 Jump/Interact.
+  - **2D Platformer:** D-pad movement, B Jump, Y Attack, L4 Dash, R4 Focus.
+  - **Desktop Mouse:** Right stick mouse, L2 Right Click, R2 Left Click, L1/R1 Scroll, L4 Volume Down, R4 Volume Up.
+- [ ] Update modal editors (`KeyCaptureModal.vue`, `DpadConfigModal.vue`, `StickConfigModal.vue`) to the Sky Glass aesthetic.
 
-### Phase 4: Refactor ESP32-S3 Firmware (`firmware/nimbus_bridge/nimbus_bridge.ino`)
-1. **Fix Legacy Bugs from Prototype:**
-   - Remove stray diff markers (`-`) and fix pointer syntax (`const char*`, `const uint8_t*`).
-   - Fix single-quoted hex bug (`ctl->miscButtons() == '0x02'`) $\rightarrow$ bitwise mask (`ctl->miscButtons() & 0x02`).
-   - Fix D-Pad equality check (`dpad == DPAD_UP`) $\rightarrow$ bitwise mask (`dpad & DPAD_UP`) so diagonal presses work.
-   - Remove `BP32.forgetBluetoothKeys()` from `setup()` so the Nimbus+ auto-reconnects immediately on boot.
-   - Throttle right-stick `Mouse.move(dx, dy)` to a fixed `8ms` (125Hz) timer with sub-pixel remainder accumulation instead of running unthrottled in `loop()`.
-   - Add edge-detection and configurable repeat cooldown (`repeat_ms`) for scroll wheel bindings (`L1`/`R1`) and state-change tracking so `Keyboard.press`/`release` only fire on transitions.
-2. **Add Dynamic JSON + NVS Persistence:**
-   - Parse incoming newline-delimited JSON from `Serial` using `ArduinoJson` (v7).
-   - Store up to 4 JSON profiles in ESP32 flash using the built-in `Preferences` (NVS) library so custom layouts survive power cycles.
-   - Support hardware shortcut (`Home + D-Pad Left/Right`) to cycle active NVS profile slots standalone without the Mac app open.
+### Phase 4: Pico SDK Firmware Architecture (`firmware/pico_bridge`)
+- [ ] Set up CMakeLists.txt for Raspberry Pi Pico 2 W (`pico2_w` / RP2350) and Pico W (`pico_w` / RP2040).
+- [ ] Configure `tusb_config.h` with Composite Keyboard + Mouse + Consumer Control + CDC Serial descriptors.
+- [ ] Implement Bluepad32 Bluetooth host driver for 8BitDo Ultimate 2C (reading sticks, triggers, L4/R4, gyro, and rumble feedback).
+- [ ] Implement safe flash storage persistence using `flash_safe_execute()`.
+- [ ] Implement NDJSON serial command parser for profile updates, telemetry streaming, and `reset_usb_boot(0, 0)` bootloader trigger.
 
-### Phase 5: GitHub Actions macOS Universal Build Pipeline
-1. Create `.github/workflows/build-release.yml` triggered on pushes to `main` and version tags (`v*`).
-2. Configure a `macos-latest` job using `tauri-apps/tauri-action@v0` with `--target universal-apple-darwin` to produce an Apple Silicon + Intel universal `.dmg` and `.app` bundle.
-3. Add a parallel `windows-latest` job running `cargo check` and `npm run build` to ensure Windows local builds never regress.
+### Phase 5: Tauri Desktop Native Capabilities
+- [ ] Implement macOS `NSWorkspace` / Windows foreground app watcher in Rust to auto-switch profile on active window focus change.
+- [ ] Implement 1-click `.uf2` flashing: detect mounted `RPI-RP2` / `RP2350` USB storage volume and copy binary directly.
+- [ ] Wire up live stick/trigger telemetry to animate the 3D model with subtle physical tilt and lighting reactions.
+
+---
+
+## 6. Verification & Delivery Criteria
+1. **Visual Fidelity:** Desktop app matches the light, airy Cerulean Sky Glass mockup with floating pills, translucent blur, and high text contrast.
+2. **Interactive 3D Controller:** 8BitDo Ultimate 2C renders at 120 FPS, responds to clicks on all buttons (including L4 and R4), switches Front/Top views, and draws the glowing tracer ribbon to the active table row.
+3. **Typography & Polish:** Crisp Geist-style typography with tabular numerical metrics and strictly zero emojis.
+4. **Pico Firmware:** Clean CMake build producing `.uf2` binaries for both Pico 2 W and Pico W.
+5. **Zero Friction Flashing:** Firmware updates trigger via in-app button, booting the Pico directly into mass storage mode without touching physical pins or buttons.

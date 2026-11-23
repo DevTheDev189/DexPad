@@ -25,3 +25,18 @@ src-tauri/target/
 .DS_Store
 Thumbs.db
 
+# Environment Secrets
+.env
+*.env
+.env.local
+
+# Temporary reference & intermediate generation files
+.agents/
+*.glb
+*.zip
+Gemini_Generated_Image*
+61vh2++sAhL*
+OLD_IMPLEMENTATION_PLAN.md
+PS5_Renders/
+
+

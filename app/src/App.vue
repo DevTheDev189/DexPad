@@ -1,56 +1,137 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import type { ControllerControlId, ButtonBinding, Profile } from './types/keymap';
-import MetaballDefs from './components/MetaballDefs.vue';
-import CosmicBackground from './components/CosmicBackground.vue';
-import NimbusControllerSvg from './components/NimbusControllerSvg.vue';
-import BindingTable from './components/BindingTable.vue';
+import { ref, watch, onMounted } from 'vue';
+import type { ControllerControlId, ButtonBinding, StickConfig } from './types/keymap';
+import type { PlatformLegendMode, ChassisFinish } from './types/controllers';
+import AmbientBackground from './components/AmbientBackground.vue';
 import ProfilePillBar from './components/ProfilePillBar.vue';
-import BindingInspector from './components/BindingInspector.vue';
+import PS5ControllerView from './components/PS5ControllerView.vue';
+import MappingTable from './components/MappingTable.vue';
 import KeyCaptureModal from './components/KeyCaptureModal.vue';
-import ProfileManagerModal from './components/ProfileManagerModal.vue';
+import StickConfigModal from './components/StickConfigModal.vue';
+import DpadConfigModal from './components/DpadConfigModal.vue';
+import GameLibraryModal from './components/GameLibraryModal.vue';
+import HardwareBridgeModal from './components/HardwareBridgeModal.vue';
+import AppearanceSettingsModal from './components/AppearanceSettingsModal.vue';
+import PicoFlasherModal from './components/PicoFlasherModal.vue';
 import CosmicIcon from './components/CosmicIcon.vue';
+import type { DiscoveredGame } from './services/gameDiscoveryService';
 import { useProfiles } from './composables/useProfiles';
 import { useSerial } from './composables/useSerial';
+import { useTheme } from './composables/useTheme';
+
+const platformMode = ref<PlatformLegendMode>('playstation');
+const chassisFinish = ref<ChassisFinish>('sky_blue');
+const showHardwareModal = ref(false);
+const isAppearanceModalOpen = ref(false);
+const isPicoFlasherModalOpen = ref(false);
+const dismissedBootloaderPath = ref<string | null>(null);
+
+const { applyThemeToDOM } = useTheme();
+
+onMounted(() => {
+  applyThemeToDOM();
+});
+
+// Query parameter initialization for testing and automated showcase renders
+if (typeof window !== 'undefined') {
+  const urlParams = new URLSearchParams(window.location.search);
+  const qFinish = urlParams.get('finish') as ChassisFinish | null;
+  if (qFinish && ['sky_blue', 'obsidian', 'galaxy', 'arctic', 'cyberpunk'].includes(qFinish)) {
+    chassisFinish.value = qFinish;
+  }
+}
 
 const {
   profiles,
   activeSlot,
   activeProfile,
   selectedControl,
-  hoveredControl,
   isDirty,
   selectSlot,
-  renameProfile,
-  setProfileInSlot,
+  addGameProfile,
+  removeProfile,
   updateButtonBinding,
   updateStickConfig,
   markClean,
-  exportCurrentProfileJson,
-  importProfileJson,
 } = useProfiles();
+
+if (typeof window !== 'undefined') {
+  const urlParams = new URLSearchParams(window.location.search);
+  const qControl = urlParams.get('control') as ControllerControlId | null;
+  if (qControl) {
+    selectedControl.value = qControl;
+  }
+}
 
 const {
   ports,
   selectedPort,
-  isConnected,
-  isStreamingTelemetry,
+  connectionStatus,
+  detectedControllerType,
+  detectedControllerName,
+  picoBootloaderDevice,
+  isFlashingPico,
+  flashStatusMessage,
+  flashError,
   telemetryData,
-  lastAckMessage,
-  connectionError,
   refreshPorts,
   connect,
   disconnect,
   sendProfileToDevice,
   switchDeviceSlot,
-  toggleTelemetryStream,
+  flashPico,
 } = useSerial();
 
-// UI View Modes & Modals
-const currentView = ref<'controller' | 'table'>('controller');
-const isManagerOpen = ref(false);
-const capturingControlId = ref<ControllerControlId | null>(null);
+// Auto-detect controller type and sync 2D visual & platform legends
+watch(detectedControllerType, (newType) => {
+  if (newType && platformMode.value !== newType) {
+    platformMode.value = newType;
+    showToast(`Detected: ${detectedControllerName.value} (${newType.toUpperCase()})`);
+  }
+});
 
+// Auto-prompt when a blank or BOOTSEL Raspberry Pi Pico is connected
+watch(picoBootloaderDevice, (newDevice) => {
+  if (newDevice && newDevice.mount_path !== dismissedBootloaderPath.value) {
+    isPicoFlasherModalOpen.value = true;
+  }
+});
+
+const handleCloseFlasher = () => {
+  if (picoBootloaderDevice.value) {
+    dismissedBootloaderPath.value = picoBootloaderDevice.value.mount_path;
+  }
+  isPicoFlasherModalOpen.value = false;
+};
+
+const handleFlashPico = async (target?: string) => {
+  if (!picoBootloaderDevice.value) return;
+  const ok = await flashPico(picoBootloaderDevice.value.mount_path, target);
+  if (ok) {
+    showToast('DexPad Firmware Flashed! Board is rebooting...');
+  }
+};
+
+// Modal States
+const isGameLibraryModalOpen = ref(false);
+const capturingControlId = ref<ControllerControlId | null>(null);
+const configuringStickId = ref<'left_stick' | 'right_stick' | null>(null);
+const isDpadConfigModalOpen = ref(false);
+
+const handleOpenDpadConfig = () => {
+  isDpadConfigModalOpen.value = true;
+};
+
+const handleSaveDpadConfig = (bindings: { up: string; down: string; left: string; right: string }) => {
+  updateButtonBinding('dpad_up', { type: bindings.up ? 'key' : 'none', code: bindings.up });
+  updateButtonBinding('dpad_down', { type: bindings.down ? 'key' : 'none', code: bindings.down });
+  updateButtonBinding('dpad_left', { type: bindings.left ? 'key' : 'none', code: bindings.left });
+  updateButtonBinding('dpad_right', { type: bindings.right ? 'key' : 'none', code: bindings.right });
+  showToast('Saved D-Pad configuration');
+  isDpadConfigModalOpen.value = false;
+};
+
+// Toast
 const toastMessage = ref<string | null>(null);
 let toastTimer: any = null;
 
@@ -62,40 +143,58 @@ const showToast = (msg: string) => {
   }, 3500);
 };
 
-// Spotlight state for reactive background aura
-const spotlightState = ref<{ x: number; y: number; active: boolean; color?: string }>({
-  x: window.innerWidth * 0.45,
-  y: window.innerHeight * 0.5,
-  active: false,
-});
-
-const handleControlSelect = (id: ControllerControlId) => {
+// Handlers
+const handleSelectControl = (id: ControllerControlId) => {
   selectedControl.value = id;
 };
 
-const handleControlHover = (id: ControllerControlId | null, pos?: { x: number; y: number }) => {
-  hoveredControl.value = id;
-  if (id && pos) {
-    const rect = document.querySelector('.controller-svg')?.getBoundingClientRect();
-    if (rect) {
-      const scaleX = rect.width / 980;
-      const scaleY = rect.height / 600;
-      spotlightState.value = {
-        x: rect.left + pos.x * scaleX,
-        y: rect.top + pos.y * scaleY,
-        active: true,
-        color: id === 'a' || id.startsWith('dpad') ? 'cyan' : 'violet',
-      };
-    }
+const handleConfigureControl = (id: ControllerControlId) => {
+  selectedControl.value = id;
+  if (id === 'left_stick') {
+    handleOpenStickConfig('left_stick');
+  } else if (id === 'right_stick') {
+    handleOpenStickConfig('right_stick');
+  } else if (id === 'dpad') {
+    handleOpenDpadConfig();
   } else {
-    spotlightState.value.active = false;
+    handleOpenRebind(id);
   }
 };
 
-const handleSlotChange = (slot: number) => {
+const handleSelectProfile = (slot: number) => {
   selectSlot(slot);
   switchDeviceSlot(slot);
-  showToast(`Active Slot: ${slot + 1} (${profiles.value[slot].name})`);
+  showToast(`Active Profile: "${profiles.value[slot]?.name || 'Profile'}"`);
+};
+
+const handleAddGameFromDatabase = (game: DiscoveredGame) => {
+  const newSlot = addGameProfile({
+    name: game.name,
+    gameTitle: game.name,
+    coverUrl: game.coverUrl,
+    genre: game.genre,
+    description: game.description,
+    defaultProfile: game.defaultProfile,
+  });
+  switchDeviceSlot(newSlot);
+  showToast(`Added "${game.name}" to Library`);
+};
+
+const handleAddCustomGame = (name: string) => {
+  const newSlot = addGameProfile({
+    name,
+    gameTitle: name,
+    genre: 'Custom',
+    description: 'Blank controller mapping ready for custom configuration.',
+  });
+  switchDeviceSlot(newSlot);
+  showToast(`Created Custom Profile: "${name}"`);
+};
+
+const handleRemoveProfile = (slot: number) => {
+  const name = profiles.value[slot]?.name || 'Profile';
+  removeProfile(slot);
+  showToast(`Removed "${name}" from Library`);
 };
 
 const handleSaveToDevice = async () => {
@@ -108,8 +207,13 @@ const handleSaveToDevice = async () => {
   }
 };
 
-const openCaptureModal = (id: ControllerControlId) => {
+const handleOpenRebind = (id: ControllerControlId) => {
   capturingControlId.value = id;
+};
+
+const handleClearBinding = (id: ControllerControlId) => {
+  updateButtonBinding(id, { type: 'none' });
+  showToast(`Cleared binding for ${id.toUpperCase()}`);
 };
 
 const handleCapturedBinding = (binding: ButtonBinding) => {
@@ -120,210 +224,154 @@ const handleCapturedBinding = (binding: ButtonBinding) => {
   capturingControlId.value = null;
 };
 
-const handleAddProfileFromHub = (newProf: Profile, targetSlot: number) => {
-  setProfileInSlot(targetSlot, newProf);
-  selectSlot(targetSlot);
-  isManagerOpen.value = false;
-  showToast(`Applied "${newProf.name}" to Slot ${targetSlot + 1}`);
+const handleOpenStickConfig = (stickId: 'left_stick' | 'right_stick') => {
+  configuringStickId.value = stickId;
 };
 
-const handleExportJson = () => {
-  const data = exportCurrentProfileJson();
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${activeProfile.value.name.toLowerCase().replace(/\s+/g, '_')}_profile.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Profile JSON exported');
-};
-
-const handleImportJson = () => {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
-  input.onchange = (e: any) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const content = event.target?.result as string;
-        if (importProfileJson(content)) {
-          showToast('Profile imported successfully');
-        } else {
-          showToast('Invalid profile JSON file');
-        }
-      };
-      reader.readAsText(file);
-    }
-  };
-  input.click();
+const handleSaveStickConfig = (config: StickConfig) => {
+  if (configuringStickId.value === 'left_stick') {
+    updateStickConfig('left', config);
+    showToast('Updated Left Stick configuration');
+  } else if (configuringStickId.value === 'right_stick') {
+    updateStickConfig('right', config);
+    showToast('Updated Right Stick configuration');
+  }
+  configuringStickId.value = null;
 };
 </script>
 
 <template>
   <div class="app-root">
-    <!-- SVG Metaball Defs -->
-    <MetaballDefs />
+    <!-- Galaxy Space Background -->
+    <AmbientBackground />
 
-    <!-- Parallax Cosmic Background + Reactive Orb -->
-    <CosmicBackground :spotlight="spotlightState" />
-
-    <!-- Main App Container -->
+    <!-- Application Shell -->
     <div class="app-shell">
-      <!-- ============================================================== -->
-      <!-- TOP NAVIGATION BAR -->
-      <!-- ============================================================== -->
-      <header class="top-nav glass-panel">
-        <div class="brand-group">
-          <div class="brand-orb"></div>
-          <div>
-            <h1 class="brand-title">NIMBUS+ <span class="accent-text">COSMIC BRIDGE</span></h1>
-            <p class="brand-subtitle">Driverless Hardware USB Gamepad Bridge for macOS</p>
-          </div>
-        </div>
-
-        <!-- Serial Port Connection Cluster -->
-        <div class="serial-cluster">
-          <div class="port-picker-group">
-            <select v-model="selectedPort" class="port-select">
-              <option value="" disabled>Select Serial Port</option>
-              <option v-for="p in ports" :key="p.name" :value="p.name">
-                {{ p.name }} {{ p.is_esp32 ? '[ESP32-S3]' : '' }}
-              </option>
-            </select>
-            <button class="icon-btn" title="Refresh serial ports" @click="refreshPorts">
-              <CosmicIcon name="refresh" size="13" />
-            </button>
-          </div>
-
-          <button
-            class="btn-cosmic conn-btn"
-            :class="{ disconnect: isConnected }"
-            @click="isConnected ? disconnect() : connect()"
-          >
-            <CosmicIcon :name="isConnected ? 'unlink' : 'link'" size="13" />
-            <span>{{ isConnected ? 'Disconnect' : 'Connect Dongle' }}</span>
-          </button>
-
-          <!-- Telemetry Toggle -->
-          <button
-            class="btn-glass-secondary stream-btn"
-            :class="{ active: isStreamingTelemetry }"
-            :title="isStreamingTelemetry ? 'Stop live telemetry' : 'Stream live inputs from controller (30Hz)'"
-            @click="toggleTelemetryStream()"
-          >
-            <CosmicIcon name="radio" size="13" />
-            <span>Telemetry</span>
-          </button>
-        </div>
-
-        <!-- Export / Import Actions -->
-        <div class="extra-actions">
-          <button class="btn-glass-secondary btn-sm" title="Import JSON profile" @click="handleImportJson">
-            <CosmicIcon name="upload" size="12" />
-            <span>Import</span>
-          </button>
-          <button class="btn-glass-secondary btn-sm" title="Export current profile as JSON" @click="handleExportJson">
-            <CosmicIcon name="download" size="12" />
-            <span>Export</span>
-          </button>
-        </div>
-      </header>
-
-      <!-- ============================================================== -->
-      <!-- PROFILE TABS & VIEW SWITCHER BAR -->
-      <!-- ============================================================== -->
+      <!-- Top Pill Bar with Left-aligned Active Game Profile Button -->
       <ProfilePillBar
+        :active-profile="activeProfile"
         :profiles="profiles"
         :active-slot="activeSlot"
         :is-dirty="isDirty"
-        :is-connected="isConnected"
-        :current-view="currentView"
-        @select-slot="handleSlotChange"
-        @rename-slot="renameProfile"
-        @save-to-device="handleSaveToDevice"
-        @open-manager="isManagerOpen = true"
-        @toggle-view="currentView = $event"
+        :is-connected="connectionStatus === 'ready'"
+        :bootloader-device="picoBootloaderDevice"
+        @open-library="isGameLibraryModalOpen = true"
+        @save-to-dongle="handleSaveToDevice"
+        @open-appearance="isAppearanceModalOpen = true"
+        @open-hardware="showHardwareModal = true"
+        @open-flasher="isPicoFlasherModalOpen = true"
       />
 
-      <!-- ============================================================== -->
-      <!-- WORKSPACE: Controller View / Table View + Inspector -->
-      <!-- ============================================================== -->
-      <main class="main-workspace">
-        <!-- Center Viewport (Controller or Table) -->
-        <div class="main-display-card glass-panel">
-          <!-- View 1: Interactive Vector Controller -->
-          <NimbusControllerSvg
-            v-if="currentView === 'controller'"
-            :profile="activeProfile"
+      <!-- Main Split View Stage -->
+      <main class="main-split-stage">
+        <!-- Left Side: Interactive 2D Controller Render with Hotspots -->
+        <section class="left-pane">
+          <PS5ControllerView
             :selected-control="selectedControl"
-            :hovered-control="hoveredControl"
+            :buttons="activeProfile.buttons"
+            :left-stick="activeProfile.sticks.left"
+            :right-stick="activeProfile.sticks.right"
             :telemetry="telemetryData"
-            :active-slot="activeSlot"
-            @select="handleControlSelect"
-            @hover="handleControlHover"
+            :platform-mode="platformMode"
+            :chassis-finish="chassisFinish"
+            @select-control="handleSelectControl"
+            @configure-control="handleConfigureControl"
+            @update:platform-mode="platformMode = $event"
           />
+        </section>
 
-          <!-- View 2: Controller-to-Keybind Mapping Table -->
-          <BindingTable
-            v-else
-            :profile="activeProfile"
+        <!-- Right Side: Mapping Table with Floating Pill Rows -->
+        <section class="right-pane">
+          <MappingTable
+            :platform-mode="platformMode"
             :selected-control="selectedControl"
-            @select-control="handleControlSelect"
-            @record-control="openCaptureModal"
+            :buttons="activeProfile.buttons"
+            :left-stick="activeProfile.sticks.left"
+            :right-stick="activeProfile.sticks.right"
+            @select-control="handleSelectControl"
+            @rebind="handleOpenRebind"
+            @clear-binding="handleClearBinding"
+            @configure-stick="handleOpenStickConfig"
+            @configure-dpad="handleOpenDpadConfig"
           />
-        </div>
-
-        <!-- Right Side: Binding Inspector -->
-        <BindingInspector
-          :control-id="selectedControl"
-          :profile="activeProfile"
-          @update-button="updateButtonBinding"
-          @update-stick="updateStickConfig"
-          @open-capture-modal="openCaptureModal"
-        />
+        </section>
       </main>
-
-      <!-- Status Footer Bar -->
-      <footer class="app-footer">
-        <div class="footer-left">
-          <span class="footer-tag">STATUS:</span>
-          <span class="footer-val">
-            {{ connectionError || lastAckMessage || (isConnected ? 'Connected to ' + selectedPort : 'Awaiting hardware connection') }}
-          </span>
-        </div>
-        <div class="footer-right">
-          <span>Firmware v2.0.0</span>
-          <span class="dot-sep">•</span>
-          <span>Shortcut: Home + D-Pad to cycle slots</span>
-        </div>
-      </footer>
     </div>
 
     <!-- Modals -->
-    <!-- 1. Live Input Capture Modal -->
+    <!-- Hardware Dongle & Bluetooth Pairing Modal -->
+    <HardwareBridgeModal
+      :is-open="showHardwareModal"
+      :ports="ports"
+      :selected-port="selectedPort"
+      :is-connected="connectionStatus === 'ready'"
+      :active-profile="activeProfile"
+      @close="showHardwareModal = false"
+      @connect="connect($event)"
+      @disconnect="disconnect"
+      @refresh-ports="refreshPorts"
+      @sync-profile="handleSaveToDevice"
+      @select-controller="platformMode = $event as PlatformLegendMode"
+    />
+
+    <!-- Key Capture / Rebind Modal -->
     <KeyCaptureModal
       v-if="capturingControlId"
       :control-id="capturingControlId"
+      :platform-mode="platformMode"
       @captured="handleCapturedBinding"
       @close="capturingControlId = null"
     />
 
-    <!-- 2. Game Profile & Presets Hub Modal -->
-    <ProfileManagerModal
-      v-if="isManagerOpen"
-      :profiles="profiles"
-      :active-slot="activeSlot"
-      @close="isManagerOpen = false"
-      @select-profile="handleSlotChange"
-      @add-profile="handleAddProfileFromHub"
+    <!-- Analog Stick Configuration Modal -->
+    <StickConfigModal
+      v-if="configuringStickId"
+      :stick-id="configuringStickId"
+      :config="configuringStickId === 'left_stick' ? activeProfile.sticks.left : activeProfile.sticks.right"
+      @save="handleSaveStickConfig"
+      @close="configuringStickId = null"
     />
 
-    <!-- Toast Notification Banner -->
-    <div v-if="toastMessage" class="toast-banner">
-      <CosmicIcon name="sparkles" size="13" class="toast-sparkle" />
+    <!-- Unified Directional D-Pad Configuration Modal -->
+    <DpadConfigModal
+      v-if="isDpadConfigModalOpen"
+      :buttons="activeProfile.buttons"
+      @save="handleSaveDpadConfig"
+      @close="isDpadConfigModalOpen = false"
+    />
+
+    <!-- Game Profiles & Database Library Modal -->
+    <GameLibraryModal
+      :is-open="isGameLibraryModalOpen"
+      :profiles="profiles"
+      :active-slot="activeSlot"
+      @close="isGameLibraryModalOpen = false"
+      @select-profile="handleSelectProfile"
+      @add-game="handleAddGameFromDatabase"
+      @add-custom-game="handleAddCustomGame"
+      @remove-profile="handleRemoveProfile"
+    />
+
+    <!-- Appearance & Background Settings Modal -->
+    <AppearanceSettingsModal
+      :is-open="isAppearanceModalOpen"
+      @close="isAppearanceModalOpen = false"
+    />
+
+    <!-- Blank / BOOTSEL Pico Flasher Modal -->
+    <PicoFlasherModal
+      :is-open="isPicoFlasherModalOpen"
+      :device="picoBootloaderDevice"
+      :is-flashing="isFlashingPico"
+      :flash-status="flashStatusMessage"
+      :flash-error="flashError"
+      @close="handleCloseFlasher"
+      @flash="handleFlashPico"
+    />
+
+    <!-- Floating Toast Notification -->
+    <div v-if="toastMessage" class="toast-pill">
+      <CosmicIcon name="sparkles" size="14" class="toast-icon" />
       <span>{{ toastMessage }}</span>
     </div>
   </div>
@@ -331,226 +379,180 @@ const handleImportJson = () => {
 
 <style scoped>
 .app-root {
+  position: relative;
   width: 100vw;
   height: 100vh;
-  position: relative;
   overflow: hidden;
-  display: flex;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
 }
 
 .app-shell {
   position: relative;
-  z-index: 5;
-  width: 100%;
-  height: 100%;
+  z-index: 10;
   display: flex;
   flex-direction: column;
-  padding: 12px 18px 8px 18px;
-  gap: 10px;
+  width: 100%;
+  height: 100%;
 }
 
-/* Top Nav */
-.top-nav {
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  border-radius: 14px;
-}
-
-.brand-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-orb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ffffff 0%, var(--accent-cyan) 40%, var(--accent-violet) 100%);
-  box-shadow: 0 0 18px rgba(56, 189, 248, 0.75);
-  animation: pulseGlow 2.5s infinite;
-}
-
-.brand-title {
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
-  color: #fff;
-}
-
-.accent-text {
-  background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-violet) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.brand-subtitle {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-/* Serial Cluster */
-.serial-cluster {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.port-picker-group {
-  display: flex;
-  align-items: center;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  padding: 2px 6px;
-}
-
-.port-select {
-  background: transparent;
-  border: none;
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  outline: none;
-  cursor: pointer;
-  max-width: 210px;
-}
-
-.port-select option {
-  background: #0f172a;
-  color: #fff;
-}
-
-.icon-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s ease;
-}
-
-.icon-btn:hover {
-  color: var(--accent-cyan);
-}
-
-.conn-btn {
-  padding: 6px 14px;
-  font-size: 12px;
-}
-
-.conn-btn.disconnect {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.45) 0%, rgba(185, 28, 28, 0.45) 100%);
-  border-color: rgba(239, 68, 68, 0.4);
-}
-
-.stream-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.stream-btn.active {
-  background: rgba(56, 189, 248, 0.2);
-  border-color: var(--accent-cyan);
-  color: #fff;
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
-}
-
-.extra-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-sm {
-  padding: 5px 11px;
-  font-size: 11.5px;
-}
-
-/* Workspace */
-.main-workspace {
-  flex: 1;
-  display: flex;
-  gap: 12px;
-  min-height: 0;
-}
-
-.main-display-card {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
+/* Two-column split main workspace matching Gemini mockup */
+.main-split-stage {
   position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.12fr 1fr;
+  gap: 20px;
+  padding: 8px 28px 24px 28px;
+  min-height: 0;
   overflow: hidden;
 }
 
-/* Footer */
-.app-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 2px 8px;
-  font-size: 11px;
-  color: var(--text-muted);
+.left-pane,
+.right-pane {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.footer-left {
+/* Port Flyout Drawer */
+.port-flyout {
+  position: absolute;
+  bottom: 40px;
+  left: 28px;
+  width: 280px;
+  background: rgba(18, 14, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(168, 85, 247, 0.2);
+  backdrop-filter: blur(24px);
+  padding: 10px;
+  z-index: 100;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
 }
 
-.footer-tag {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: var(--accent-cyan);
-}
-
-.footer-right {
+.flyout-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  color: #c084fc;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.dot-sep {
-  opacity: 0.4;
+.icon-btn-tiny {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+}
+.icon-btn-tiny:hover {
+  color: #ffffff;
+}
+
+.flyout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.flyout-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.flyout-item:hover {
+  background: rgba(168, 85, 247, 0.2);
+  color: #ffffff;
+}
+
+.flyout-item.active {
+  background: rgba(168, 85, 247, 0.3);
+  border: 1px solid #c084fc;
+  color: #ffffff;
+}
+
+.tag-chip {
+  font-size: 9px;
+  color: #c084fc;
+  text-transform: uppercase;
+}
+
+.empty-hint {
+  padding: 8px;
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+}
+
+.disconnect-btn {
+  margin-top: 4px;
+  padding: 6px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.disconnect-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
 }
 
 /* Toast */
-.toast-banner {
+.toast-pill {
   position: fixed;
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(12, 18, 36, 0.92);
+  background: var(--glass-surface-elevated);
+  border: 1px solid var(--accent-custom);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25), 0 0 20px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.35);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 24px rgba(56, 189, 248, 0.35);
+  -webkit-backdrop-filter: blur(20px);
   padding: 8px 18px;
   border-radius: 9999px;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
-  z-index: 1000;
-  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 2000;
+  animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.toast-sparkle {
-  color: var(--accent-cyan);
+.toast-icon {
+  color: var(--accent-sky);
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translate(-50%, 15px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, 15px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 </style>

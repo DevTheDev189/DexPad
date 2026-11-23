@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Nimbus Cosmic Bridge",
+  "productName": "DexPad",
   "version": "0.1.0",
-  "identifier": "com.nimbus.cosmicbridge",
+  "identifier": "com.dexpad.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Nimbus+ Cosmic Bridge",
+        "title": "DexPad",
         "width": 1200,
         "height": 800,
         "minWidth": 1120,

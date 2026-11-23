@@ -1,346 +1,384 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import type { Profile } from '../types/keymap';
+import type { PicoBootloaderDevice } from '../composables/useSerial';
 import CosmicIcon from './CosmicIcon.vue';
+import DexPadLogo from './DexPadLogo.vue';
 
-defineProps<{
+const props = defineProps<{
+  activeProfile?: Profile;
   profiles: Profile[];
   activeSlot: number;
-  isDirty: boolean;
-  isConnected: boolean;
-  currentView: 'controller' | 'table';
+  isDirty?: boolean;
+  isConnected?: boolean;
+  bootloaderDevice?: PicoBootloaderDevice | null;
 }>();
 
 const emit = defineEmits<{
-  (e: 'select-slot', slot: number): void;
-  (e: 'rename-slot', slot: number, name: string): void;
-  (e: 'save-to-device'): void;
-  (e: 'open-manager'): void;
-  (e: 'toggle-view', view: 'controller' | 'table'): void;
+  (e: 'open-library'): void;
+  (e: 'save-to-dongle'): void;
+  (e: 'open-appearance'): void;
+  (e: 'open-hardware'): void;
+  (e: 'open-flasher'): void;
 }>();
 
-const editingSlot = ref<number | null>(null);
-const editNameInput = ref('');
+const imgFailed = ref(false);
 
-const startRenaming = (slot: number, currentName: string) => {
-  editingSlot.value = slot;
-  editNameInput.value = currentName;
-};
-
-const commitRename = (slot: number) => {
-  if (editNameInput.value.trim()) {
-    emit('rename-slot', slot, editNameInput.value.trim());
+watch(
+  () => props.activeProfile?.coverUrl,
+  () => {
+    imgFailed.value = false;
   }
-  editingSlot.value = null;
-};
+);
 </script>
 
 <template>
-  <div class="profile-bar-wrapper glass-panel">
-    <!-- Preset Slots -->
-    <div class="slots-container">
-      <div
-        v-for="(prof, idx) in profiles"
-        :key="prof.slot"
-        class="slot-tab"
-        :class="{ active: activeSlot === idx }"
-        @click="emit('select-slot', idx)"
-      >
-        <!-- Sliding active liquid indicator pill -->
-        <div v-if="activeSlot === idx" class="active-metaball-pill"></div>
-
-        <div class="slot-content">
-          <!-- Game Cover Avatar or Slot Badge -->
-          <div v-if="prof.coverUrl" class="slot-cover-avatar">
-            <img :src="prof.coverUrl" :alt="prof.name" class="avatar-img" />
-          </div>
-          <span v-else class="slot-index-badge">P{{ idx + 1 }}</span>
-          
-          <template v-if="editingSlot === idx">
-            <input
-              v-model="editNameInput"
-              class="rename-input"
-              autofocus
-              @blur="commitRename(idx)"
-              @keydown.enter="commitRename(idx)"
-              @click.stop
-            />
-          </template>
-          <template v-else>
-            <span class="slot-name" @dblclick.stop="startRenaming(idx, prof.name)">
-              {{ prof.name }}
-            </span>
-            <button
-              class="edit-icon-btn"
-              title="Rename profile"
-              @click.stop="startRenaming(idx, prof.name)"
-            >
-              <CosmicIcon name="edit" size="11" />
-            </button>
-          </template>
-        </div>
+  <div class="top-nav-bar">
+    <!-- Left-aligned Active Game Profile Button -->
+    <div class="top-profile-left">
+      <!-- DexPad Brand Lockup -->
+      <div class="brand-logo-pill" title="DexPad Universal Controller Studio">
+        <DexPadLogo variant="full" :size="30" />
       </div>
 
-      <!-- Open Game Hub & Presets Button -->
+      <!-- Game Profile Selector Button -->
       <button
-        class="btn-glass-secondary presets-hub-btn"
-        title="Open Game Profiles & Community Presets Hub"
-        @click="emit('open-manager')"
+        class="game-profile-btn"
+        title="Open Game Library & Profiles"
+        @click="emit('open-library')"
       >
-        <CosmicIcon name="gamepad" size="13" />
-        <span>Game Hub</span>
+        <div class="game-thumb-avatar">
+          <img
+            v-if="activeProfile?.coverUrl && !imgFailed"
+            :src="activeProfile.coverUrl"
+            :alt="activeProfile?.name"
+            class="thumb-img"
+            @error="imgFailed = true"
+          />
+          <div v-else class="thumb-icon-placeholder">
+            <CosmicIcon name="gamepad" size="15" />
+          </div>
+        </div>
+
+        <div class="game-meta">
+          <span class="game-title">{{ activeProfile?.name || 'Default Game' }}</span>
+          <span class="game-subtitle">Profiles & Library</span>
+        </div>
+
+        <div class="chevron-badge">
+          <CosmicIcon name="chevron-down" size="11" />
+        </div>
       </button>
     </div>
 
-    <!-- Right Controls: View Switcher & Hardware Sync Action -->
-    <div class="right-actions-group">
-      <!-- Controller vs Table View Switcher -->
-      <div class="view-switcher-pill glass-pill">
-        <button
-          class="view-btn"
-          :class="{ active: currentView === 'controller' }"
-          title="Interactive 3D Controller View"
-          @click="emit('toggle-view', 'controller')"
-        >
-          <CosmicIcon name="gamepad" size="13" />
-          <span>Controller</span>
-        </button>
-        <button
-          class="view-btn"
-          :class="{ active: currentView === 'table' }"
-          title="Controller to Keybind Table View"
-          @click="emit('toggle-view', 'table')"
-        >
-          <CosmicIcon name="table" size="13" />
-          <span>Keybind Table</span>
-        </button>
-      </div>
-
-      <!-- Sync Status Badge -->
-      <div class="sync-status" :class="{ synced: isConnected && !isDirty, unsaved: isDirty }">
-        <span class="status-dot"></span>
-        <span class="status-label">
-          {{ !isConnected ? 'Local Mode' : (isDirty ? 'Unsaved' : 'Synced') }}
-        </span>
-      </div>
-
-      <!-- Save to Dongle Action -->
+    <!-- Right-aligned Actions: Bluetooth, Style, Save to Dongle with Status Dot -->
+    <div class="top-actions-right">
+      <!-- Flash Pico Pill (shown when blank / BOOTSEL Pico detected) -->
       <button
-        class="btn-cosmic sync-btn"
-        title="Write active profile into ESP32 Flash Memory (NVS)"
-        @click="emit('save-to-device')"
+        v-if="bootloaderDevice"
+        class="flash-pico-pill-btn"
+        title="Blank Raspberry Pi Pico detected in BOOTSEL mode - Click to Flash"
+        @click="emit('open-flasher')"
       >
-        <CosmicIcon name="bolt" size="13" />
+        <span class="flash-pulse-dot"></span>
+        <CosmicIcon name="sparkles" size="13" />
+        <span>Flash Pico</span>
+      </button>
+
+      <!-- Bluetooth Manager Pill -->
+      <button
+        class="nav-pill-btn"
+        title="Bluetooth Connections"
+        @click="emit('open-hardware')"
+      >
+        <CosmicIcon name="radio" size="13" />
+        <span>Bluetooth</span>
+      </button>
+
+      <!-- Style Pill -->
+      <button
+        class="nav-pill-btn"
+        title="Style & Theme Settings"
+        @click="emit('open-appearance')"
+      >
+        <CosmicIcon name="brush" size="13" />
+        <span>Style</span>
+      </button>
+
+      <!-- Save to Dongle Pill with Red / Green Indicator -->
+      <button
+        class="sync-pill-btn"
+        :class="{ 'is-dirty': isDirty }"
+        title="Save active profile to Dongle"
+        @click="emit('save-to-dongle')"
+      >
+        <span class="conn-dot" :class="{ online: isConnected }"></span>
         <span>Save to Dongle</span>
+        <span v-if="isDirty" class="pulse-dot"></span>
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.profile-bar-wrapper {
+.top-nav-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 14px;
-  width: 100%;
-  height: 52px;
-  border-radius: 14px;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.slots-container {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.slot-tab {
+  padding: 16px 28px 12px 28px;
   position: relative;
+  z-index: 40;
+}
+
+/* Left-aligned Game Profile Button */
+.top-profile-left {
   display: flex;
   align-items: center;
-  padding: 5px 12px;
-  border-radius: 10px;
+  gap: 12px;
+}
+
+.brand-logo-pill {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px 4px 6px;
+  border-radius: 9999px;
+  background: var(--glass-surface-pill);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-pill);
+  backdrop-filter: blur(var(--glass-blur-val, 28px)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur-val, 28px)) saturate(180%);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.brand-logo-pill:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25), 0 0 16px rgba(56, 189, 248, 0.25);
+  transform: translateY(-1px);
+}
+
+.game-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 14px 5px 6px;
+  border-radius: 9999px;
+  background: var(--glass-surface-pill);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-pill);
+  backdrop-filter: blur(var(--glass-blur-val, 28px)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur-val, 28px)) saturate(180%);
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none;
 }
 
-.slot-tab:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.06);
+.game-profile-btn:hover {
+  background: var(--glass-surface-elevated);
+  border-color: var(--accent-custom);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), 0 0 16px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.3);
 }
 
-.active-metaball-pill {
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25) 0%, rgba(139, 92, 246, 0.3) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.3), inset 0 1px 1.5px rgba(255, 255, 255, 0.35);
-  pointer-events: none;
-}
-
-.slot-content {
-  position: relative;
-  z-index: 1;
+.game-thumb-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.slot-cover-avatar {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.avatar-img {
+.thumb-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.slot-index-badge {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 5px;
-  border-radius: 4px;
-  background: rgba(12, 18, 36, 0.7);
-  color: var(--accent-cyan);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-}
-
-.slot-name {
-  font-weight: 600;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  transition: color 0.2s ease;
-}
-
-.slot-tab.active .slot-name {
-  color: #ffffff;
-  text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
-}
-
-.edit-icon-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
+.thumb-icon-placeholder {
   display: flex;
   align-items: center;
-  opacity: 0;
-  transition: all 0.2s ease;
-  padding: 2px;
+  justify-content: center;
+  color: var(--accent-custom);
 }
 
-.slot-tab:hover .edit-icon-btn {
-  opacity: 0.8;
+.game-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
 }
 
-.edit-icon-btn:hover {
-  color: var(--accent-cyan);
-  opacity: 1;
+.game-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
 }
 
-.rename-input {
-  background: rgba(12, 18, 36, 0.95);
-  border: 1px solid var(--accent-cyan);
-  border-radius: 6px;
-  color: #fff;
-  font-size: 12px;
+.game-subtitle {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   font-weight: 600;
-  padding: 2px 6px;
-  outline: none;
-  font-family: var(--font-sans);
-  width: 100px;
 }
 
-.presets-hub-btn {
-  padding: 5px 10px;
-  font-size: 11.5px;
-  margin-left: 4px;
+.chevron-badge {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  transition: transform 0.2s ease, color 0.2s ease;
 }
 
-/* Right Actions */
-.right-actions-group {
+.game-profile-btn:hover .chevron-badge {
+  color: var(--accent-custom);
+  transform: translateY(1px);
+}
+
+/* Top Actions Right */
+.top-actions-right {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-/* View Switcher */
-.view-switcher-pill {
-  display: flex;
-  padding: 2px;
-  gap: 2px;
-}
-
-.view-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-radius: 9999px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.view-btn:hover:not(.active) {
-  color: #fff;
-}
-
-.view-btn.active {
-  background: rgba(56, 189, 248, 0.25);
-  color: #fff;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.2);
-}
-
-/* Sync Status */
-.sync-status {
-  display: flex;
+.flash-pico-pill-btn {
+  display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(14, 165, 233, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(var(--glass-blur-val, 28px));
+  -webkit-backdrop-filter: blur(var(--glass-blur-val, 28px));
+  box-shadow: 0 0 16px rgba(14, 165, 233, 0.28);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: pulseGlow 2.5s infinite ease-in-out;
 }
 
-.status-dot {
+.flash-pico-pill-btn:hover {
+  background: rgba(14, 165, 233, 0.28);
+  border-color: rgba(56, 189, 248, 0.7);
+  transform: translateY(-1px);
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+}
+
+.flash-pulse-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #64748b;
-  transition: all 0.3s ease;
+  background-color: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
 }
 
-.sync-status.synced .status-dot {
-  background: #10b981;
-  box-shadow: 0 0 10px #10b981;
-}
-.sync-status.synced .status-label {
-  color: #34d399;
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(14, 165, 233, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.45);
+  }
 }
 
-.sync-status.unsaved .status-dot {
-  background: #f59e0b;
-  box-shadow: 0 0 10px #f59e0b;
+.nav-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--glass-surface-pill);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  padding: 7px 15px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(var(--glass-blur-val, 28px));
+  -webkit-backdrop-filter: blur(var(--glass-blur-val, 28px));
+  box-shadow: var(--shadow-pill);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.sync-status.unsaved .status-label {
+
+.nav-pill-btn:hover {
+  background: var(--glass-surface-elevated);
+  border-color: var(--accent-custom);
+  color: var(--accent-custom);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.25);
+}
+
+.conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+.conn-dot.online {
+  background-color: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+}
+
+.sync-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  position: relative;
+  background: var(--glass-surface-pill);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  padding: 7px 16px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(var(--glass-blur-val, 28px));
+  -webkit-backdrop-filter: blur(var(--glass-blur-val, 28px));
+  box-shadow: var(--shadow-pill);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sync-pill-btn:hover {
+  background: var(--glass-surface-elevated);
+  border-color: var(--accent-custom);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.25);
+}
+
+.sync-pill-btn.is-dirty {
+  border-color: #f59e0b;
   color: #fbbf24;
 }
 
-.sync-btn {
-  padding: 6px 14px;
-  font-size: 12px;
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  background: #f59e0b;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #f59e0b;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.7;
+  }
 }
 </style>

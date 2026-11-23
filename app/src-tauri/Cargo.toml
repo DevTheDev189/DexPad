@@ -1,12 +1,12 @@
 [package]
-name = "nimbus-cosmic-bridge"
+name = "dexpad"
 version = "0.1.0"
-description = "Nimbus+ Cosmic Bridge Desktop Configurator"
-authors = ["Nimbus Team"]
+description = "DexPad Universal Controller Studio"
+authors = ["DexPad Contributors"]
 edition = "2021"
 
 [lib]
-name = "nimbus_cosmic_bridge_lib"
+name = "dexpad_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

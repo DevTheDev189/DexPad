@@ -20,16 +20,8 @@
 #include <Preferences.h>
 #include <ArduinoJson.h>
 
-// ESP32 Native USB HID
-#if defined(CONFIG_TINYUSB_ENABLED) || defined(USE_TINYUSB)
-  #include <Adafruit_TinyUSB.h>
-#else
-  #include "USB.h"
-  #include "USBHIDKeyboard.h"
-  #include "USBHIDMouse.h"
-  USBHIDKeyboard Keyboard;
-  USBHIDMouse Mouse;
-#endif
+// ESP32 Native USB HID wrapper (isolated unit to prevent TinyUSB / BTstack symbol collisions)
+#include "usb_hid.h"
 
 // ============================================================================
 // Constants & Enums
@@ -41,6 +33,7 @@
 #define SERIAL_BUF_SIZE        2048
 #define MOUSE_POLL_INTERVAL_MS 8      // 125 Hz mouse update rate
 #define TELEMETRY_INTERVAL_MS  33     // ~30 Hz telemetry stream rate
+#define HEARTBEAT_INTERVAL_MS  1000   // 1 Hz automatic status heartbeat
 
 // Binding Types
 enum BindingType {
@@ -104,6 +97,20 @@ struct ButtonBinding {
   uint16_t repeatMs;        // Cooldown for scroll repeat (default 120ms)
   uint16_t threshold;       // Analog trigger activation threshold (0..1023)
   char codeStr[32];         // Original keycode label for JSON export
+
+  ButtonBinding() : type(BIND_NONE), hidCode(0), scrollDelta(0), repeatMs(120), threshold(40) {
+    codeStr[0] = '\0';
+  }
+
+  ButtonBinding(BindingType t, uint8_t code, int8_t scroll, uint16_t rep, uint16_t thresh, const char* str)
+    : type(t), hidCode(code), scrollDelta(scroll), repeatMs(rep), threshold(thresh) {
+    if (str) {
+      strncpy(codeStr, str, sizeof(codeStr) - 1);
+      codeStr[sizeof(codeStr) - 1] = '\0';
+    } else {
+      codeStr[0] = '\0';
+    }
+  }
 };
 
 struct StickDigitalConfig {
@@ -157,6 +164,7 @@ float mouseSubX = 0.0f;
 float mouseSubY = 0.0f;
 unsigned long lastMouseUpdate = 0;
 unsigned long lastTelemetryUpdate = 0;
+unsigned long lastHeartbeatUpdate = 0;
 
 // Shortcut debounce for Home + D-Pad slot switching
 bool shortcutTriggered = false;
@@ -542,8 +550,12 @@ void processSerialLine(const char* line) {
   const char* cmd = doc["cmd"] | "";
 
   if (strcasecmp(cmd, "PING") == 0) {
-    Serial.printf("{\"status\":\"ok\",\"device\":\"%s\",\"fw\":\"%s\",\"active_profile\":%u}\n",
-                  DEVICE_NAME, FIRMWARE_VERSION, activeSlot);
+    bool isGamepadConn = (connectedGamepad != nullptr && connectedGamepad->isConnected());
+    const char* ctlType = "none";
+    const char* ctlName = "None";
+    getConnectedControllerInfo(&ctlType, &ctlName);
+    Serial.printf("{\"status\":\"ok\",\"device\":\"%s\",\"fw\":\"%s\",\"active_profile\":%u,\"controller_connected\":%s,\"controller_type\":\"%s\",\"controller_name\":\"%s\"}\n",
+                  DEVICE_NAME, FIRMWARE_VERSION, activeSlot, isGamepadConn ? "true" : "false", ctlType, ctlName);
     return;
   }
 
@@ -622,6 +634,34 @@ void handleSerial() {
 }
 
 // ============================================================================
+// Controller Model & Platform Detection
+// ============================================================================
+void getConnectedControllerInfo(const char** outType, const char** outName) {
+  if (connectedGamepad == nullptr || !connectedGamepad->isConnected()) {
+    *outType = "none";
+    *outName = "None";
+    return;
+  }
+  const char* m = connectedGamepad->getModelName();
+  *outName = (m && strlen(m) > 0) ? m : "Bluetooth Controller";
+
+  String modelLower = String(*outName);
+  modelLower.toLowerCase();
+
+  if (modelLower.indexOf("dualsense") >= 0 || modelLower.indexOf("dualshock") >= 0 || modelLower.indexOf("playstation") >= 0 || modelLower.indexOf("sony") >= 0) {
+    *outType = "playstation";
+  } else if (modelLower.indexOf("xbox") >= 0 || modelLower.indexOf("microsoft") >= 0) {
+    *outType = "xbox";
+  } else if (modelLower.indexOf("switch") >= 0 || modelLower.indexOf("joycon") >= 0 || modelLower.indexOf("joy-con") >= 0 || modelLower.indexOf("nintendo") >= 0) {
+    *outType = "nintendo";
+  } else if (modelLower.indexOf("8bitdo") >= 0) {
+    *outType = "8bitdo";
+  } else {
+    *outType = "playstation";
+  }
+}
+
+// ============================================================================
 // Bluepad32 Callbacks
 // ============================================================================
 void onConnectedGamepad(GamepadPtr ctl) {
@@ -640,8 +680,8 @@ void onDisconnectedGamepad(GamepadPtr ctl) {
   if (connectedGamepad == ctl) {
     connectedGamepad = nullptr;
     // Release any currently pressed keys or mouse buttons
-    Keyboard.releaseAll();
-    Mouse.release(1 | 2 | 4);
+    usbKeyboardReleaseAll();
+    usbMouseRelease(1 | 2 | 4);
     memset(prevButtonState, 0, sizeof(prevButtonState));
     memset(rawButtonState, 0, sizeof(rawButtonState));
   }
@@ -678,25 +718,25 @@ void processControllerInputs(GamepadPtr ctl) {
   int32_t axisRX = ctl->axisRX();
   int32_t axisRY = ctl->axisRY();
 
-  // Raw state evaluation
-  rawButtonState[BTN_A] = (buttons & BUTTON_A) != 0;
-  rawButtonState[BTN_B] = (buttons & BUTTON_B) != 0;
-  rawButtonState[BTN_X] = (buttons & BUTTON_X) != 0;
-  rawButtonState[BTN_Y] = (buttons & BUTTON_Y) != 0;
-  rawButtonState[BTN_L1] = (buttons & BUTTON_SHOULDER_L) != 0;
-  rawButtonState[BTN_R1] = (buttons & BUTTON_SHOULDER_R) != 0;
-  rawButtonState[BTN_L3] = (buttons & BUTTON_THUMB_L) != 0;
-  rawButtonState[BTN_R3] = (buttons & BUTTON_THUMB_R) != 0;
+  // Raw state evaluation via official Bluepad32 helper methods
+  rawButtonState[BTN_A] = ctl->a();
+  rawButtonState[BTN_B] = ctl->b();
+  rawButtonState[BTN_X] = ctl->x();
+  rawButtonState[BTN_Y] = ctl->y();
+  rawButtonState[BTN_L1] = ctl->l1();
+  rawButtonState[BTN_R1] = ctl->r1();
+  rawButtonState[BTN_L3] = ctl->thumbL();
+  rawButtonState[BTN_R3] = ctl->thumbR();
 
-  // D-Pad bitmask check (supports simultaneous diagonals)
-  rawButtonState[BTN_DPAD_UP] = (dpad & DPAD_UP) != 0;
-  rawButtonState[BTN_DPAD_DOWN] = (dpad & DPAD_DOWN) != 0;
-  rawButtonState[BTN_DPAD_LEFT] = (dpad & DPAD_LEFT) != 0;
-  rawButtonState[BTN_DPAD_RIGHT] = (dpad & DPAD_RIGHT) != 0;
+  // D-Pad bitmask check (Up: 0x01, Down: 0x02, Right: 0x04, Left: 0x08)
+  rawButtonState[BTN_DPAD_UP]    = (dpad & 0x01) != 0;
+  rawButtonState[BTN_DPAD_DOWN]  = (dpad & 0x02) != 0;
+  rawButtonState[BTN_DPAD_RIGHT] = (dpad & 0x04) != 0;
+  rawButtonState[BTN_DPAD_LEFT]  = (dpad & 0x08) != 0;
 
-  // Triggers with configurable threshold
-  rawButtonState[BTN_L2] = (throttle >= currentProfile.buttons[BTN_L2].threshold) || ((buttons & BUTTON_TRIGGER_L) != 0);
-  rawButtonState[BTN_R2] = (brake >= currentProfile.buttons[BTN_R2].threshold) || ((buttons & BUTTON_TRIGGER_R) != 0);
+  // Triggers: brake() is Left Trigger (L2), throttle() is Right Trigger (R2) in Bluepad32
+  rawButtonState[BTN_L2] = (brake >= currentProfile.buttons[BTN_L2].threshold) || ctl->l2();
+  rawButtonState[BTN_R2] = (throttle >= currentProfile.buttons[BTN_R2].threshold) || ctl->r2();
 
   // Misc buttons: Home / Options / Menu
   rawButtonState[BTN_HOME] = (misc & 0x01) != 0;
@@ -732,28 +772,22 @@ void processControllerInputs(GamepadPtr ctl) {
 
     if (b.type == BIND_KEY && b.hidCode != 0) {
       if (isDown && !wasDown) {
-        Keyboard.press(b.hidCode);
+        usbKeyboardPress(b.hidCode);
       } else if (!isDown && wasDown) {
-        Keyboard.release(b.hidCode);
+        usbKeyboardRelease(b.hidCode);
       }
     } else if (b.type == BIND_MOUSE_BUTTON && b.hidCode != 0) {
       if (isDown && !wasDown) {
-        Mouse.press(b.hidCode);
+        usbMousePress(b.hidCode);
       } else if (!isDown && wasDown) {
-        Mouse.release(b.hidCode);
+        usbMouseRelease(b.hidCode);
       }
     } else if (b.type == BIND_MOUSE_SCROLL && b.scrollDelta != 0) {
       if (isDown) {
         uint16_t cooldown = (b.repeatMs > 20) ? b.repeatMs : 120;
         if (!wasDown || (now - lastScrollTime[i] >= cooldown)) {
           // Send wheel scroll (+1: up, -1: down)
-          #if defined(CONFIG_TINYUSB_ENABLED) || defined(USE_TINYUSB)
-            // TinyUSB scroll delta
-            Mouse.move(0, 0, b.scrollDelta);
-          #else
-            // ESP32 USBHIDMouse scroll
-            Mouse.move(0, 0, b.scrollDelta);
-          #endif
+          usbMouseMove(0, 0, b.scrollDelta);
           lastScrollTime[i] = now;
         }
       }
@@ -778,10 +812,10 @@ void processControllerInputs(GamepadPtr ctl) {
     uint8_t lKey = currentProfile.leftStick.digital.leftCode;
     uint8_t rKey = currentProfile.leftStick.digital.rightCode;
 
-    if (uKey) { if (wDown && !prevW) Keyboard.press(uKey); if (!wDown && prevW) Keyboard.release(uKey); }
-    if (dKey) { if (sDown && !prevS) Keyboard.press(dKey); if (!sDown && prevS) Keyboard.release(dKey); }
-    if (lKey) { if (aDown && !prevA) Keyboard.press(lKey); if (!aDown && prevA) Keyboard.release(lKey); }
-    if (rKey) { if (dDown && !prevD) Keyboard.press(rKey); if (!dDown && prevD) Keyboard.release(rKey); }
+    if (uKey) { if (wDown && !prevW) usbKeyboardPress(uKey); if (!wDown && prevW) usbKeyboardRelease(uKey); }
+    if (dKey) { if (sDown && !prevS) usbKeyboardPress(dKey); if (!sDown && prevS) usbKeyboardRelease(dKey); }
+    if (lKey) { if (aDown && !prevA) usbKeyboardPress(lKey); if (!aDown && prevA) usbKeyboardRelease(lKey); }
+    if (rKey) { if (dDown && !prevD) usbKeyboardPress(rKey); if (!dDown && prevD) usbKeyboardRelease(rKey); }
 
     prevW = wDown; prevS = sDown; prevA = aDown; prevD = dDown;
   }
@@ -813,7 +847,7 @@ void processControllerInputs(GamepadPtr ctl) {
         int stepY = (int)mouseSubY;
 
         if (stepX != 0 || stepY != 0) {
-          Mouse.move(stepX, stepY);
+          usbMouseMove(stepX, stepY, 0);
           mouseSubX -= stepX;
           mouseSubY -= stepY;
         }
@@ -841,13 +875,7 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
 
   // Initialize Native USB HID
-  #if defined(CONFIG_TINYUSB_ENABLED) || defined(USE_TINYUSB)
-    // TinyUSB initialization if configured
-  #else
-    USB.begin();
-    Keyboard.begin();
-    Mouse.begin();
-  #endif
+  initUSBHID();
 
   // Initialize NVS storage
   prefs.begin("nimbus_cfg", false);
@@ -879,6 +907,18 @@ void loop() {
   // 3. Process controller inputs if connected
   if (connectedGamepad && connectedGamepad->isConnected()) {
     processControllerInputs(connectedGamepad);
+  }
+
+  // 4. Periodic 1Hz Heartbeat broadcast for zero-config auto-detection
+  unsigned long now = millis();
+  if (now - lastHeartbeatUpdate >= HEARTBEAT_INTERVAL_MS) {
+    lastHeartbeatUpdate = now;
+    bool isGamepadConn = (connectedGamepad != nullptr && connectedGamepad->isConnected());
+    const char* ctlType = "none";
+    const char* ctlName = "None";
+    getConnectedControllerInfo(&ctlType, &ctlName);
+    Serial.printf("{\"event\":\"HEARTBEAT\",\"device\":\"%s\",\"fw\":\"%s\",\"active_profile\":%u,\"controller_connected\":%s,\"controller_type\":\"%s\",\"controller_name\":\"%s\"}\n",
+                  DEVICE_NAME, FIRMWARE_VERSION, activeSlot, isGamepadConn ? "true" : "false", ctlType, ctlName);
   }
 
   // Brief yield for RTOS task scheduling

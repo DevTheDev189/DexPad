@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { ButtonBinding, ControllerControlId } from '../types/keymap';
+import type { PlatformLegendMode } from '../types/controllers';
 import CosmicIcon from './CosmicIcon.vue';
+import ControllerButtonIcon from './ControllerButtonIcon.vue';
 
-defineProps<{
-  controlId: ControllerControlId;
-}>();
+const props = withDefaults(
+  defineProps<{
+    controlId: ControllerControlId;
+    platformMode?: PlatformLegendMode;
+  }>(),
+  {
+    platformMode: 'xbox',
+  }
+);
 
 const emit = defineEmits<{
   (e: 'captured', binding: ButtonBinding): void;
@@ -14,12 +22,116 @@ const emit = defineEmits<{
 
 const capturedLabel = ref('Press any key or mouse button...');
 const capturedBinding = ref<ButtonBinding | null>(null);
+const selectedMediaCode = ref('');
+
+const MEDIA_ACTIONS = [
+  { label: 'Volume Up', code: 'MEDIA_VOLUME_UP' },
+  { label: 'Volume Down', code: 'MEDIA_VOLUME_DOWN' },
+  { label: 'Mute Audio', code: 'MEDIA_MUTE' },
+  { label: 'Play / Pause', code: 'MEDIA_PLAY_PAUSE' },
+  { label: 'Next Track', code: 'MEDIA_NEXT_TRACK' },
+  { label: 'Previous Track', code: 'MEDIA_PREV_TRACK' },
+  { label: 'Brightness Up', code: 'MEDIA_BRIGHTNESS_UP' },
+  { label: 'Brightness Down', code: 'MEDIA_BRIGHTNESS_DOWN' },
+];
+
+const platformDisplayName = computed(() => {
+  if (props.platformMode === 'playstation') return 'PlayStation';
+  if (props.platformMode === 'nintendo') return 'Nintendo';
+  return 'Xbox';
+});
+
+const formattedControlName = computed(() => {
+  const id = props.controlId;
+  const p = props.platformMode;
+  if (p === 'playstation') {
+    switch (id) {
+      case 'a': return 'Cross (✕)';
+      case 'b': return 'Circle (○)';
+      case 'x': return 'Square (□)';
+      case 'y': return 'Triangle (△)';
+      case 'l1': return 'L1 Shoulder';
+      case 'r1': return 'R1 Shoulder';
+      case 'l2': return 'L2 Trigger';
+      case 'r2': return 'R2 Trigger';
+      case 'l3': return 'L3 Stick Click';
+      case 'r3': return 'R3 Stick Click';
+      case 'options': return 'Create / Share';
+      case 'menu': return 'Options';
+      case 'home': return 'PS Home';
+      case 'touchpad': return 'Touchpad';
+      case 'dpad_up': return 'D-Pad Up';
+      case 'dpad_down': return 'D-Pad Down';
+      case 'dpad_left': return 'D-Pad Left';
+      case 'dpad_right': return 'D-Pad Right';
+      default: return id.toUpperCase().replace('_', ' ');
+    }
+  } else if (p === 'nintendo') {
+    switch (id) {
+      case 'a': return 'A Button (Right)';
+      case 'b': return 'B Button (Bottom)';
+      case 'x': return 'X Button (Top)';
+      case 'y': return 'Y Button (Left)';
+      case 'l1': return 'L Shoulder';
+      case 'r1': return 'R Shoulder';
+      case 'l2': return 'ZL Trigger';
+      case 'r2': return 'ZR Trigger';
+      case 'l3': return 'Left Stick Click';
+      case 'r3': return 'Right Stick Click';
+      case 'options': return 'Minus (−)';
+      case 'menu': return 'Plus (+)';
+      case 'home': return 'Home';
+      case 'dpad_up': return 'D-Pad Up';
+      case 'dpad_down': return 'D-Pad Down';
+      case 'dpad_left': return 'D-Pad Left';
+      case 'dpad_right': return 'D-Pad Right';
+      default: return id.toUpperCase().replace('_', ' ');
+    }
+  } else {
+    // Xbox
+    switch (id) {
+      case 'a': return 'A Button (Green)';
+      case 'b': return 'B Button (Red)';
+      case 'x': return 'X Button (Blue)';
+      case 'y': return 'Y Button (Yellow)';
+      case 'l1': return 'LB (Left Bumper)';
+      case 'r1': return 'RB (Right Bumper)';
+      case 'l2': return 'LT (Left Trigger)';
+      case 'r2': return 'RT (Right Trigger)';
+      case 'l3': return 'LS (Left Stick Click)';
+      case 'r3': return 'RS (Right Stick Click)';
+      case 'options': return 'View Button';
+      case 'menu': return 'Menu Button';
+      case 'home': return 'Xbox Guide';
+      case 'dpad_up': return 'D-Pad Up';
+      case 'dpad_down': return 'D-Pad Down';
+      case 'dpad_left': return 'D-Pad Left';
+      case 'dpad_right': return 'D-Pad Right';
+      default: return id.toUpperCase().replace('_', ' ');
+    }
+  }
+});
+
+const handleMediaSelect = (e: Event) => {
+  const code = (e.target as HTMLSelectElement).value;
+  selectedMediaCode.value = code;
+  const item = MEDIA_ACTIONS.find((m) => m.code === code);
+  if (item) {
+    capturedLabel.value = `Media: ${item.label}`;
+    capturedBinding.value = {
+      type: 'consumer_control',
+      code: item.code,
+    };
+  }
+};
 
 const handleKeyDown = (e: KeyboardEvent) => {
+  // If user is inside the select element, let them use keyboard to browse
+  if ((e.target as HTMLElement)?.tagName === 'SELECT') return;
+
   e.preventDefault();
   e.stopPropagation();
 
-  // Escape to cancel if not bound
   if (e.key === 'Escape' && !capturedBinding.value) {
     emit('close');
     return;
@@ -45,13 +157,13 @@ const handleKeyDown = (e: KeyboardEvent) => {
     label = 'Delete / Backspace';
   } else if (e.code === 'MetaLeft' || e.code === 'MetaRight') {
     codeStr = 'KEY_LEFT_GUI';
-    label = 'Command (Cmd)';
+    label = 'Command / Win';
   } else if (e.code === 'AltLeft' || e.code === 'AltRight') {
     codeStr = 'KEY_LEFT_ALT';
-    label = 'Option (Alt)';
+    label = 'Alt / Option';
   } else if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
     codeStr = 'KEY_LEFT_CTRL';
-    label = 'Control (Ctrl)';
+    label = 'Ctrl';
   } else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     codeStr = 'KEY_LEFT_SHIFT';
     label = 'Shift';
@@ -83,7 +195,8 @@ const handleKeyDown = (e: KeyboardEvent) => {
     label = e.key;
   }
 
-  capturedLabel.value = label;
+  selectedMediaCode.value = '';
+  capturedLabel.value = `Key: ${label}`;
   capturedBinding.value = {
     type: 'key',
     code: codeStr,
@@ -92,13 +205,13 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
 const handleMouseDown = (e: MouseEvent) => {
   const target = e.target as HTMLElement;
-  if (target.closest('.modal-actions') || target.closest('.close-btn')) {
+  if (target.closest('.modal-actions') || target.closest('.close-btn') || target.closest('.media-dropdown-row')) {
     return;
   }
 
   e.preventDefault();
   let codeStr = 'MOUSE_LEFT';
-  let label = 'Primary Left Click';
+  let label = 'Left Click';
 
   if (e.button === 0) {
     codeStr = 'MOUSE_LEFT';
@@ -111,7 +224,8 @@ const handleMouseDown = (e: MouseEvent) => {
     label = 'Right Click';
   }
 
-  capturedLabel.value = label;
+  selectedMediaCode.value = '';
+  capturedLabel.value = `Mouse: ${label}`;
   capturedBinding.value = {
     type: 'mouse_button',
     code: codeStr,
@@ -120,16 +234,21 @@ const handleMouseDown = (e: MouseEvent) => {
 };
 
 const handleWheel = (e: WheelEvent) => {
+  const target = e.target as HTMLElement;
+  if (target.closest('.modal-actions') || target.closest('.media-dropdown-row')) {
+    return;
+  }
   e.preventDefault();
+  selectedMediaCode.value = '';
   if (e.deltaY < 0) {
-    capturedLabel.value = 'Mouse Scroll Wheel Up';
+    capturedLabel.value = 'Mouse Scroll Up';
     capturedBinding.value = {
       type: 'mouse_scroll',
       delta: 1,
       repeat_ms: 120,
     };
   } else if (e.deltaY > 0) {
-    capturedLabel.value = 'Mouse Scroll Wheel Down';
+    capturedLabel.value = 'Mouse Scroll Down';
     capturedBinding.value = {
       type: 'mouse_scroll',
       delta: -1,
@@ -160,42 +279,64 @@ onUnmounted(() => {
 <template>
   <div class="capture-backdrop" @click.self="emit('close')">
     <div class="capture-card glass-panel-elevated">
+      <!-- Modal Header with Large Big 3 Platform Icon -->
       <div class="modal-header">
         <div class="modal-title-row">
-          <span class="pulsar-dot"></span>
-          <h3 class="modal-title">Live Input Capture</h3>
+          <div class="platform-icon-box">
+            <ControllerButtonIcon :control-id="controlId" :platform-mode="platformMode" size="28" />
+          </div>
+          <div class="header-titles">
+            <h3 class="modal-title">
+              Mapping for <span class="control-name-highlight">{{ formattedControlName }}</span>
+            </h3>
+            <span class="platform-subtag">{{ platformDisplayName }} Profile Binding</span>
+          </div>
         </div>
-        <button class="close-btn" @click="emit('close')">
-          <CosmicIcon name="x" size="14" />
+        <button class="close-btn" @click="emit('close')" aria-label="Close">
+          <CosmicIcon name="close" size="14" />
         </button>
       </div>
-
-      <p class="modal-desc">
-        Mapping input for: <strong class="target-name">{{ controlId.toUpperCase().replace('_', ' ') }}</strong>
-      </p>
 
       <!-- Visual Capture Area -->
       <div class="capture-visual-box">
-        <div class="input-display-badge">
+        <div class="input-display-badge" :class="{ assigned: !!capturedBinding }">
           {{ capturedLabel }}
         </div>
         <p class="hint-text">
-          Press any keyboard key, click a mouse button, or roll the scroll wheel.
+          Press any keyboard key or mouse button
         </p>
       </div>
 
-      <!-- Actions -->
+      <!-- Small Neat Consumer Media Controls Dropdown -->
+      <div class="media-dropdown-row">
+        <label for="media-select" class="media-label">
+          <span>Media Controls</span>
+        </label>
+        <select
+          id="media-select"
+          class="media-select"
+          :value="selectedMediaCode"
+          @change="handleMediaSelect"
+        >
+          <option value="">Select shortcut (Volume, Play/Pause, Brightness)...</option>
+          <option v-for="item in MEDIA_ACTIONS" :key="item.code" :value="item.code">
+            {{ item.label }}
+          </option>
+        </select>
+      </div>
+
+      <!-- Polished Glass Cancel and Apply Buttons -->
       <div class="modal-actions">
-        <button class="btn-glass-secondary" @click="emit('close')">
-          Cancel (Esc)
+        <button class="btn-cancel" @click="emit('close')">
+          Cancel
         </button>
         <button
-          class="btn-cosmic"
+          class="btn-apply"
           :disabled="!capturedBinding"
           @click="confirmBinding"
         >
-          <CosmicIcon name="check" size="12" />
-          <span>Apply Binding</span>
+          <CosmicIcon name="check" size="13" />
+          <span>Apply</span>
         </button>
       </div>
     </div>
@@ -206,50 +347,83 @@ onUnmounted(() => {
 .capture-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(3, 5, 10, 0.78);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(3, 7, 18, 0.40);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 999;
-  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 20px;
 }
 
 .capture-card {
-  width: 440px;
-  padding: 24px;
-  border-radius: 18px;
+  width: 100%;
+  max-width: 440px;
+  padding: 22px 24px;
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  background-color: var(--glass-surface-elevated);
+  background-image: linear-gradient(
+    135deg,
+    rgba(var(--accent-custom-rgb, 125, 211, 252), calc(var(--glass-tint-val, 0.14) * 0.45)) 0%,
+    transparent 80%
+  );
+  backdrop-filter: blur(var(--glass-blur-val, 28px)) saturate(190%);
+  -webkit-backdrop-filter: blur(var(--glass-blur-val, 28px)) saturate(190%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass-elevated);
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
 }
 
 .modal-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.pulsar-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent-cyan);
-  box-shadow: 0 0 12px var(--accent-cyan);
-  animation: pulseGlow 1.8s infinite;
+.platform-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(var(--accent-custom-rgb, 125, 211, 252), 0.16);
+  border: 1px solid var(--accent-custom);
+  color: var(--accent-custom);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.28);
+}
+
+.header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .modal-title {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.control-name-highlight {
+  color: var(--accent-custom);
+}
+
+.platform-subtag {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .close-btn {
@@ -257,54 +431,50 @@ onUnmounted(() => {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.modal-desc {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  margin-bottom: 20px;
-}
-
-.target-name {
-  color: var(--accent-cyan);
-  font-family: var(--font-mono);
+  color: var(--text-primary);
+  background: var(--btn-bg);
 }
 
 .capture-visual-box {
-  position: relative;
-  height: 150px;
+  height: 98px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   border-radius: 14px;
-  background: rgba(10, 15, 29, 0.75);
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  margin-bottom: 20px;
-  padding: 16px;
+  background: var(--glass-surface-pill);
+  border: 1.5px dashed var(--glass-border);
+  padding: 14px;
+  gap: 8px;
 }
 
 .input-display-badge {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: #ffffff;
-  background: rgba(56, 189, 248, 0.18);
-  border: 1px solid rgba(56, 189, 248, 0.5);
-  padding: 10px 20px;
-  border-radius: 10px;
-  box-shadow: 0 0 24px rgba(56, 189, 248, 0.3);
-  margin-bottom: 12px;
-  max-width: 90%;
+  color: var(--text-primary);
+  background: var(--glass-surface-elevated);
+  border: 1px solid var(--glass-border-subtle);
+  padding: 7px 16px;
+  border-radius: 9px;
   text-align: center;
+  max-width: 90%;
+  transition: all 0.2s ease;
+}
+
+.input-display-badge.assigned {
+  border-color: var(--accent-custom);
+  box-shadow: 0 0 16px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.35);
+  color: var(--accent-custom);
 }
 
 .hint-text {
@@ -313,11 +483,111 @@ onUnmounted(() => {
   text-align: center;
 }
 
+/* Compact Media Dropdown */
+.media-dropdown-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.media-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.media-select {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border-subtle);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.media-select:focus,
+.media-select:hover {
+  border-color: var(--accent-custom);
+  box-shadow: 0 0 12px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.25);
+}
+
+.media-select option {
+  background: var(--bg-sky-deep, #0c1220);
+  color: var(--text-primary, #ffffff);
+}
+
+/* Polished Modal Actions */
 .modal-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+  border-top: 1px solid var(--glass-border-subtle);
+  padding-top: 14px;
+}
+
+.btn-cancel {
+  padding: 8px 16px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  background: var(--btn-bg);
+  border: 1px solid var(--glass-border-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.btn-cancel:hover {
+  background: var(--glass-surface-elevated);
+  border-color: var(--glass-border);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.btn-apply {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--accent-custom-rgb, 125, 211, 252), 0.95) 0%,
+    rgba(var(--accent-custom-rgb, 125, 211, 252), 0.75) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-apply:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.48);
+  transform: translateY(-1px);
+}
+
+.btn-apply:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+  box-shadow: none;
 }
 
 @keyframes fadeIn {

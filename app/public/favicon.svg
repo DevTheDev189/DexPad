@@ -1,0 +1,47 @@
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fav-accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="fav-surface" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#182235" />
+      <stop offset="100%" stop-color="#0b111e" />
+    </linearGradient>
+    <filter id="fav-depth" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.8" flood-color="rgba(0, 0, 0, 0.45)" />
+    </filter>
+  </defs>
+
+  <!-- Apple-Style Rounded Squircle Tile -->
+  <rect
+    x="2"
+    y="2"
+    width="96"
+    height="96"
+    rx="24"
+    fill="url(#fav-surface)"
+    stroke="rgba(255, 255, 255, 0.16)"
+    stroke-width="2"
+  />
+
+  <!-- High-Contrast Minimalist X-Pad Glyph -->
+  <!-- Diagonal 1: Vibrant Cyan Capsule (Top-Left to Bottom-Right) -->
+  <rect
+    x="20"
+    y="41"
+    width="60"
+    height="18"
+    rx="9"
+    transform="rotate(45 50 50)"
+    fill="url(#fav-accent)"
+  />
+
+  <!-- Diagonal 2: Pure Crisp White Contoured Stroke (Top-Right to Bottom-Left, Shifted Lower, No Black Circle) -->
+  <path
+    d="M 65,21 C 69.4,25.4 69.4,32.6 65,37 L 57,45 L 45,57 L 37,65 C 32.6,69.4 25.4,69.4 21,65 C 16.6,60.6 16.6,53.4 21,49 L 29,41 Z"
+    transform="translate(0, 3)"
+    fill="#ffffff"
+    filter="url(#fav-depth)"
+  />
+</svg>

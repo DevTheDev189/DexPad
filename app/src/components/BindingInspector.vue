@@ -515,7 +515,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 .target-name {
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .record-btn {
@@ -554,7 +554,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 .empty-title {
   font-size: 13.5px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .empty-text {
@@ -614,10 +614,10 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 }
 
 .pill-opt.active {
-  background: rgba(56, 189, 248, 0.22);
-  color: #fff;
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  background: rgba(var(--accent-custom-rgb, 125, 211, 252), 0.22);
+  color: var(--text-primary);
+  border: 1px solid var(--accent-custom);
+  box-shadow: 0 0 10px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.25);
 }
 
 .slider-header {
@@ -673,8 +673,8 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 .search-input-wrap {
   display: flex;
   align-items: center;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--input-bg);
+  border: 1px solid var(--glass-border-subtle);
   border-radius: 8px;
   padding: 6px 10px;
   gap: 8px;
@@ -688,7 +688,7 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   background: transparent;
   border: none;
   outline: none;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 11.5px;
   font-family: var(--font-sans);
   width: 100%;
@@ -718,14 +718,14 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 }
 
 .key-option-row:hover {
-  background: rgba(56, 189, 248, 0.12);
-  color: #fff;
+  background: var(--glass-surface-elevated);
+  color: var(--text-primary);
 }
 
 .key-option-row.selected {
-  background: rgba(56, 189, 248, 0.2);
-  border-color: rgba(56, 189, 248, 0.5);
-  color: #fff;
+  background: var(--glass-surface-active);
+  border-color: var(--accent-custom);
+  color: var(--accent-sky);
 }
 
 .key-badge {
@@ -750,8 +750,8 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--glass-surface-pill);
+  border: 1px solid var(--glass-border-subtle);
   border-radius: 8px;
   padding: 5px 8px;
 }
@@ -765,10 +765,10 @@ const updateStickDirectionKey = (dir: 'up' | 'down' | 'left' | 'right', val: str
 
 .dir-input {
   width: 48px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--input-bg);
+  border: 1px solid var(--glass-border-subtle);
   border-radius: 4px;
-  color: #fff;
+  color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 11px;
   text-align: center;

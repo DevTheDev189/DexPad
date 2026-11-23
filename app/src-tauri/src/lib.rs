@@ -38,6 +38,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             serial::get_ports,
+            serial::auto_connect_dongle,
             serial::connect_port,
             serial::disconnect_port,
             serial::is_connected,
@@ -46,6 +47,9 @@ pub fn run() {
             serial::request_profile,
             serial::set_input_stream,
             serial::send_raw_command,
+            serial::reboot_to_bootloader,
+            serial::detect_pico_bootloader,
+            serial::flash_pico_firmware,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Nimbus Cosmic Bridge");

@@ -86,6 +86,8 @@ impl SerialManager {
                                     if let Some(event) = val.get("event").and_then(|v| v.as_str()) {
                                         if event == "INPUT" {
                                             let _ = handle_clone.emit("serial-telemetry", &val);
+                                        } else if event == "HEARTBEAT" {
+                                            let _ = handle_clone.emit("serial-heartbeat", &val);
                                         }
                                     } else if let Some(cmd) = val.get("cmd").and_then(|v| v.as_str()) {
                                         if cmd == "PROFILE_DATA" {
@@ -178,6 +180,17 @@ pub fn enumerate_ports() -> Vec<SerialPortEntry> {
                 _ => {}
             }
 
+            // Detect Raspberry Pi Pico 2 W / Pico W (Raspberry Pi VID is 0x2E8A)
+            let is_pico = vid == Some(0x2E8A)
+                || manufacturer
+                    .as_ref()
+                    .map(|m| m.to_lowercase().contains("raspberry"))
+                    .unwrap_or(false)
+                || product
+                    .as_ref()
+                    .map(|pr| pr.to_lowercase().contains("pico") || pr.to_lowercase().contains("rp2"))
+                    .unwrap_or(false);
+
             // Detect ESP32-S3 (Espressif VID is 0x303A)
             let is_esp32 = vid == Some(0x303A)
                 || p.port_name.to_lowercase().contains("usbmodem")
@@ -198,6 +211,7 @@ pub fn enumerate_ports() -> Vec<SerialPortEntry> {
                 manufacturer,
                 product,
                 is_esp32,
+                is_pico,
             });
         }
     }
@@ -207,6 +221,30 @@ pub fn enumerate_ports() -> Vec<SerialPortEntry> {
 // ----------------------------------------------------------------------------
 // Tauri Commands
 // ----------------------------------------------------------------------------
+#[tauri::command]
+pub fn auto_connect_dongle(
+    app_handle: AppHandle,
+    manager_state: tauri::State<Arc<Mutex<SerialManager>>>,
+) -> Result<Option<String>, String> {
+    let mut manager = manager_state
+        .lock()
+        .map_err(|e| format!("Manager lock error: {}", e))?;
+
+    if manager.is_connected() {
+        return Ok(manager.current_port());
+    }
+
+    let ports = enumerate_ports();
+    // Prioritize Pico 2 W / Pico W, then ESP32
+    if let Some(target_port) = ports.iter().find(|p| p.is_pico).or_else(|| ports.iter().find(|p| p.is_esp32)) {
+        let name = target_port.name.clone();
+        manager.connect(app_handle, name.clone(), 115200)?;
+        return Ok(Some(name));
+    }
+
+    Ok(None)
+}
+
 #[tauri::command]
 pub fn get_ports() -> Result<Vec<SerialPortEntry>, String> {
     Ok(enumerate_ports())
@@ -299,6 +337,16 @@ pub fn set_input_stream(
 }
 
 #[tauri::command]
+pub fn reboot_to_bootloader(
+    manager_state: tauri::State<Arc<Mutex<SerialManager>>>,
+) -> Result<(), String> {
+    let manager = manager_state
+        .lock()
+        .map_err(|e| format!("Manager lock error: {}", e))?;
+    manager.send_command(OutgoingCommand::Bootloader)
+}
+
+#[tauri::command]
 pub fn send_raw_command(
     manager_state: tauri::State<Arc<Mutex<SerialManager>>>,
     command: String,
@@ -311,4 +359,177 @@ pub fn send_raw_command(
         data.push('\n');
     }
     manager.write_raw(data.as_bytes())
+}
+
+// ----------------------------------------------------------------------------
+// Raspberry Pi Pico Bootloader Detection & 1-Click Firmware Flasher
+// ----------------------------------------------------------------------------
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct PicoBootloaderDevice {
+    pub mount_path: String,
+    pub volume_name: String,
+    pub board_id: String,
+    pub model: String,
+    pub is_pico_2: bool,
+}
+
+const FIRMWARE_PICO2W_BYTES: &[u8] = include_bytes!("../firmware/dexpad_pico2w.uf2");
+const FIRMWARE_PICOW_BYTES: &[u8] = include_bytes!("../firmware/dexpad_picow.uf2");
+
+pub fn scan_pico_bootloaders() -> Vec<PicoBootloaderDevice> {
+    let mut found = Vec::new();
+
+    #[cfg(target_os = "windows")]
+    {
+        for letter in b'D'..=b'Z' {
+            let drive_str = format!("{}:\\", letter as char);
+            let info_file = format!("{}INFO_UF2.TXT", drive_str);
+            let p = std::path::Path::new(&info_file);
+            if p.exists() {
+                if let Ok(content) = std::fs::read_to_string(p) {
+                    let is_pico_2 = content.contains("RP2350") || content.contains("Pico 2");
+                    let model = if is_pico_2 {
+                        "Raspberry Pi Pico 2 / 2 W (RP2350)".to_string()
+                    } else if content.contains("Pico W") {
+                        "Raspberry Pi Pico W (RP2040)".to_string()
+                    } else {
+                        "Raspberry Pi Pico (RP2040)".to_string()
+                    };
+                    let board_id = if is_pico_2 {
+                        "RP2350".to_string()
+                    } else {
+                        "RPI-RP2".to_string()
+                    };
+                    found.push(PicoBootloaderDevice {
+                        mount_path: drive_str.clone(),
+                        volume_name: if is_pico_2 { "RP2350".to_string() } else { "RPI-RP2".to_string() },
+                        board_id,
+                        model,
+                        is_pico_2,
+                    });
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let volumes = std::path::Path::new("/Volumes");
+        if let Ok(entries) = std::fs::read_dir(volumes) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let info_file = path.join("INFO_UF2.TXT");
+                if info_file.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&info_file) {
+                        let is_pico_2 = content.contains("RP2350") || content.contains("Pico 2");
+                        let model = if is_pico_2 {
+                            "Raspberry Pi Pico 2 / 2 W (RP2350)".to_string()
+                        } else if content.contains("Pico W") {
+                            "Raspberry Pi Pico W (RP2040)".to_string()
+                        } else {
+                            "Raspberry Pi Pico (RP2040)".to_string()
+                        };
+                        let board_id = if is_pico_2 {
+                            "RP2350".to_string()
+                        } else {
+                            "RPI-RP2".to_string()
+                        };
+                        let vol_name = path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("RPI-RP2")
+                            .to_string();
+                        found.push(PicoBootloaderDevice {
+                            mount_path: path.to_string_lossy().to_string(),
+                            volume_name: vol_name,
+                            board_id,
+                            model,
+                            is_pico_2,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    found
+}
+
+#[tauri::command]
+pub fn detect_pico_bootloader() -> Result<Option<PicoBootloaderDevice>, String> {
+    let list = scan_pico_bootloaders();
+    Ok(list.into_iter().next())
+}
+
+#[tauri::command]
+pub fn flash_pico_firmware(mount_path: String, target: Option<String>) -> Result<String, String> {
+    let dest_dir = std::path::Path::new(&mount_path);
+    if !dest_dir.exists() {
+        return Err(format!("Mount path '{}' does not exist or device was unmounted.", mount_path));
+    }
+
+    // Determine target based on parameter or reading INFO_UF2.TXT
+    let info_path = dest_dir.join("INFO_UF2.TXT");
+    let is_pico_2 = if let Some(ref t) = target {
+        t.to_lowercase().contains("2") || t.to_lowercase().contains("rp2350")
+    } else if info_path.exists() {
+        let content = std::fs::read_to_string(&info_path).unwrap_or_default();
+        content.contains("RP2350") || content.contains("Pico 2")
+    } else {
+        true
+    };
+
+    let fw_bytes = if is_pico_2 {
+        FIRMWARE_PICO2W_BYTES
+    } else {
+        FIRMWARE_PICOW_BYTES
+    };
+
+    let target_file = dest_dir.join("dexpad_firmware.uf2");
+    std::fs::write(&target_file, fw_bytes)
+        .map_err(|e| format!("Failed to write UF2 firmware to {}: {}", target_file.display(), e))?;
+
+    let board_label = if is_pico_2 { "Raspberry Pi Pico 2 W" } else { "Raspberry Pi Pico W" };
+    Ok(format!("Firmware successfully written to {}. Board is flashing and rebooting into DexPad Dongle mode...", board_label))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_ports() {
+        let ports = enumerate_ports();
+        println!("FOUND {} PORTS:", ports.len());
+        for p in &ports {
+            println!("  Port: {} | Type: {} | VID: {:04X?} | PID: {:04X?} | Mfr: {:?} | Prod: {:?} | ESP32: {}",
+                p.name, p.port_type, p.vid, p.pid, p.manufacturer, p.product, p.is_esp32);
+        }
+
+        // Test opening each port at 115200 and checking for ping/heartbeat
+        for p in &ports {
+            println!("\nTesting connection to {}...", p.name);
+            match serialport::new(&p.name, 115200).timeout(std::time::Duration::from_millis(500)).open() {
+                Ok(mut s) => {
+                    println!("  Successfully OPENED {}", p.name);
+                    let _ = s.write_all(b"{\"cmd\":\"PING\"}\n");
+                    let _ = s.flush();
+                    let mut buf = [0u8; 1024];
+                    match s.read(&mut buf) {
+                        Ok(n) => {
+                            let resp = String::from_utf8_lossy(&buf[..n]);
+                            println!("  Received from {}: {:?}", p.name, resp);
+                        }
+                        Err(e) => {
+                            println!("  Read timeout/error from {}: {}", p.name, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("  Failed to open {}: {}", p.name, e);
+                }
+            }
+        }
+    }
 }

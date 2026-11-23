@@ -7,6 +7,17 @@ pub struct PingResponse {
     pub device: String,
     pub fw: String,
     pub active_profile: u8,
+    #[serde(default)]
+    pub controller_connected: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeartbeatEvent {
+    pub event: String,
+    pub device: String,
+    pub fw: String,
+    pub active_profile: u8,
+    pub controller_connected: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +49,7 @@ pub struct SticksConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ButtonBinding {
     #[serde(rename = "type")]
-    pub binding_type: String, // "key" | "mouse_button" | "mouse_scroll" | "none"
+    pub binding_type: String, // "key" | "mouse_button" | "mouse_scroll" | "consumer_control" | "gyro_aim" | "none"
     #[serde(default)]
     pub code: Option<String>,
     #[serde(default)]
@@ -47,6 +58,10 @@ pub struct ButtonBinding {
     pub repeat_ms: Option<u16>,
     #[serde(default)]
     pub threshold: Option<u16>,
+    #[serde(default)]
+    pub gyro_axis: Option<String>,
+    #[serde(default)]
+    pub gyro_sensitivity: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +81,8 @@ pub struct SerialPortEntry {
     pub manufacturer: Option<String>,
     pub product: Option<String>,
     pub is_esp32: bool,
+    #[serde(default)]
+    pub is_pico: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,5 +116,7 @@ pub enum OutgoingCommand {
     },
     #[serde(rename = "STREAM_INPUTS")]
     StreamInputs { enabled: bool },
+    #[serde(rename = "BOOTLOADER")]
+    Bootloader,
 }
 

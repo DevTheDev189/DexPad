@@ -1,5 +1,5 @@
 {
-  "name": "nimbus-cosmic-bridge",
+  "name": "dexpad",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -21,4 +21,3 @@
     "vue-tsc": "^2.1.0"
   }
 }
-

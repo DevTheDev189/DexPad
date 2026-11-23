@@ -287,7 +287,7 @@ const filteredRows = computed(() => {
 .table-title {
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   letter-spacing: 0.5px;
 }
 
@@ -299,8 +299,8 @@ const filteredRows = computed(() => {
 .table-search-box {
   display: flex;
   align-items: center;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--input-bg);
+  border: 1px solid var(--glass-border-subtle);
   border-radius: 10px;
   padding: 5px 10px;
   gap: 8px;
@@ -316,7 +316,7 @@ const filteredRows = computed(() => {
   background: transparent;
   border: none;
   outline: none;
-  color: #fff;
+  color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 12px;
   width: 100%;
@@ -330,7 +330,7 @@ const filteredRows = computed(() => {
   padding: 2px;
 }
 .clear-search-btn:hover {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 /* Scroll area */
@@ -381,12 +381,12 @@ th {
 }
 
 .table-row.selected {
-  background: rgba(56, 189, 248, 0.15);
-  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.45);
+  background: rgba(var(--accent-custom-rgb, 125, 211, 252), 0.15);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.45);
 }
 
 .table-row.active {
-  background: rgba(56, 189, 248, 0.3) !important;
+  background: rgba(var(--accent-custom-rgb, 125, 211, 252), 0.3) !important;
 }
 
 td {
@@ -426,7 +426,7 @@ td:last-child {
 
 .control-label {
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .control-id-badge {
@@ -457,9 +457,9 @@ td:last-child {
 }
 
 .category-chip.shoulder {
-  background: rgba(56, 189, 248, 0.15);
-  color: var(--accent-cyan);
-  border-color: rgba(56, 189, 248, 0.3);
+  background: rgba(var(--accent-custom-rgb, 125, 211, 252), 0.15);
+  color: var(--accent-custom);
+  border-color: rgba(var(--accent-custom-rgb, 125, 211, 252), 0.3);
 }
 
 .category-chip.d-pad {
@@ -498,10 +498,10 @@ td:last-child {
   font-weight: 700;
   padding: 4px 10px;
   border-radius: 6px;
-  background: rgba(56, 189, 248, 0.18);
-  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(var(--accent-custom-rgb, 125, 211, 252), 0.18);
+  border: 1px solid rgba(var(--accent-custom-rgb, 125, 211, 252), 0.45);
   color: #fff;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 10px rgba(var(--accent-custom-rgb, 125, 211, 252), 0.2);
 }
 
 .key-chip.unmapped {
@@ -541,3 +541,4 @@ td:last-child {
   padding: 4px 8px;
 }
 </style>
+

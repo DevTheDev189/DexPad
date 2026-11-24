@@ -1,4 +1,11 @@
 import { ref, computed, watch } from 'vue';
+import {
+  saveMediaItem,
+  getMediaItem,
+  deleteMediaItem,
+  MEDIA_KEY_THEME_IMAGE,
+  MEDIA_KEY_THEME_VIDEO,
+} from '../utils/mediaStorage';
 
 export type ThemeMode = 'auto' | 'light' | 'dark';
 export type BackgroundType = 'waves' | 'orbs' | 'shapes' | 'image' | 'video';
@@ -90,6 +97,12 @@ function loadInitialConfig(): ThemeConfig {
       } else if (parsed.backgroundType === 'abstract') {
         parsed.backgroundType = 'shapes';
       }
+      if (parsed.customImageUrl === '__indexeddb__') {
+        parsed.customImageUrl = '';
+      }
+      if (parsed.customVideoUrl === '__indexeddb__') {
+        parsed.customVideoUrl = '';
+      }
       return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (err) {
@@ -101,6 +114,30 @@ function loadInitialConfig(): ThemeConfig {
 // Global reactive state shared across all components
 const config = ref<ThemeConfig>(loadInitialConfig());
 const systemIsDark = ref(false);
+
+// Asynchronously hydrate 4K/8K media from IndexedDB (no file size quota)
+async function initMediaStorage() {
+  if (typeof window === 'undefined') return;
+  try {
+    const savedImage = await getMediaItem(MEDIA_KEY_THEME_IMAGE);
+    if (savedImage) {
+      config.value.customImageUrl = savedImage;
+    } else if (config.value.customImageUrl && config.value.customImageUrl !== '__indexeddb__') {
+      await saveMediaItem(MEDIA_KEY_THEME_IMAGE, config.value.customImageUrl);
+    }
+
+    const savedVideo = await getMediaItem(MEDIA_KEY_THEME_VIDEO);
+    if (savedVideo) {
+      config.value.customVideoUrl = savedVideo;
+    } else if (config.value.customVideoUrl && config.value.customVideoUrl !== '__indexeddb__') {
+      await saveMediaItem(MEDIA_KEY_THEME_VIDEO, config.value.customVideoUrl);
+    }
+  } catch (err) {
+    console.warn('[useTheme] Error initializing media storage:', err);
+  }
+}
+
+initMediaStorage();
 
 if (typeof window !== 'undefined') {
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -143,8 +180,27 @@ watch(
   config,
   (newVal) => {
     if (typeof window !== 'undefined') {
+      // 1. Persist large media to IndexedDB with zero file size limits
+      if (newVal.customImageUrl && newVal.customImageUrl !== '__indexeddb__') {
+        saveMediaItem(MEDIA_KEY_THEME_IMAGE, newVal.customImageUrl);
+      } else if (!newVal.customImageUrl) {
+        deleteMediaItem(MEDIA_KEY_THEME_IMAGE);
+      }
+
+      if (newVal.customVideoUrl && newVal.customVideoUrl !== '__indexeddb__') {
+        saveMediaItem(MEDIA_KEY_THEME_VIDEO, newVal.customVideoUrl);
+      } else if (!newVal.customVideoUrl) {
+        deleteMediaItem(MEDIA_KEY_THEME_VIDEO);
+      }
+
+      // 2. Persist clean theme metadata to localStorage without payload
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal));
+        const cleanConfig = {
+          ...newVal,
+          customImageUrl: newVal.customImageUrl ? '__indexeddb__' : '',
+          customVideoUrl: newVal.customVideoUrl ? '__indexeddb__' : '',
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanConfig));
       } catch (err) {
         console.warn('Could not save theme config to localStorage:', err);
       }
@@ -182,14 +238,26 @@ export function useTheme() {
   const setCustomImageUrl = (url: string) => {
     config.value.customImageUrl = url;
     config.value.backgroundType = 'image';
+    if (url) {
+      saveMediaItem(MEDIA_KEY_THEME_IMAGE, url);
+    } else {
+      deleteMediaItem(MEDIA_KEY_THEME_IMAGE);
+    }
   };
 
   const setCustomVideoUrl = (url: string) => {
     config.value.customVideoUrl = url;
     config.value.backgroundType = 'video';
+    if (url) {
+      saveMediaItem(MEDIA_KEY_THEME_VIDEO, url);
+    } else {
+      deleteMediaItem(MEDIA_KEY_THEME_VIDEO);
+    }
   };
 
   const applyGlassPreset = () => {
+    deleteMediaItem(MEDIA_KEY_THEME_IMAGE);
+    deleteMediaItem(MEDIA_KEY_THEME_VIDEO);
     config.value = {
       mode: 'dark',
       accentColor: '#7dd3fc',
@@ -202,6 +270,8 @@ export function useTheme() {
   };
 
   const resetDefaults = () => {
+    deleteMediaItem(MEDIA_KEY_THEME_IMAGE);
+    deleteMediaItem(MEDIA_KEY_THEME_VIDEO);
     config.value = { ...DEFAULT_CONFIG };
   };
 

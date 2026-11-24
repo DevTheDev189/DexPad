@@ -26,12 +26,14 @@ const {
 
 const imageInputRef = ref<HTMLInputElement | null>(null);
 const videoInputRef = ref<HTMLInputElement | null>(null);
+const isProcessingImage = ref(false);
+const isProcessingVideo = ref(false);
 
 const bgOptions: { id: BackgroundType; label: string; desc: string; icon: IconName }[] = [
   { id: 'waves', label: 'Fluid Waves', desc: 'Layered undulating liquid waves with dynamic chromatic tint', icon: 'zap' },
   { id: 'orbs', label: 'Animated Orbs', desc: 'Vibrant luminous spheres drifting smoothly across the screen', icon: 'sparkle' },
   { id: 'shapes', label: 'Animated Shapes', desc: 'Rotating 3D frosted geometric crystals & floating prisms', icon: 'diamond' },
-  { id: 'image', label: 'Custom Wallpaper', desc: 'Upload your own high-resolution image', icon: 'image' },
+  { id: 'image', label: 'Custom Wallpaper', desc: 'Upload your own high-resolution image (4K/8K supported)', icon: 'image' },
   { id: 'video', label: 'Video Loop', desc: 'Upload or loop an animated MP4 background', icon: 'play' },
 ];
 
@@ -39,11 +41,16 @@ const handleImageFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement;
   if (target.files && target.files[0]) {
     const file = target.files[0];
+    isProcessingImage.value = true;
     const reader = new FileReader();
     reader.onload = (loadEvt) => {
       if (loadEvt.target?.result) {
         setCustomImageUrl(loadEvt.target.result as string);
       }
+      isProcessingImage.value = false;
+    };
+    reader.onerror = () => {
+      isProcessingImage.value = false;
     };
     reader.readAsDataURL(file);
   }
@@ -53,11 +60,16 @@ const handleVideoFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement;
   if (target.files && target.files[0]) {
     const file = target.files[0];
+    isProcessingVideo.value = true;
     const reader = new FileReader();
     reader.onload = (loadEvt) => {
       if (loadEvt.target?.result) {
         setCustomVideoUrl(loadEvt.target.result as string);
       }
+      isProcessingVideo.value = false;
+    };
+    reader.onerror = () => {
+      isProcessingVideo.value = false;
     };
     reader.readAsDataURL(file);
   }
@@ -229,9 +241,9 @@ const handleVideoFileChange = (e: Event) => {
           <div v-if="config.backgroundType === 'image'" class="media-uploader-box">
             <div class="uploader-header">
               <span class="uploader-title">Custom Wallpaper Image</span>
-              <button class="glass-btn" @click="imageInputRef?.click()">
+              <button class="glass-btn" :disabled="isProcessingImage" @click="imageInputRef?.click()">
                 <CosmicIcon name="upload" size="14" />
-                <span>Choose Image (PNG, JPG, WebP)</span>
+                <span>{{ isProcessingImage ? 'Loading 4K Image...' : 'Choose Image (PNG, JPG, WebP)' }}</span>
               </button>
               <input
                 ref="imageInputRef"
@@ -250,9 +262,9 @@ const handleVideoFileChange = (e: Event) => {
           <div v-if="config.backgroundType === 'video'" class="media-uploader-box">
             <div class="uploader-header">
               <span class="uploader-title">Custom Video Loop (MP4)</span>
-              <button class="glass-btn" @click="videoInputRef?.click()">
+              <button class="glass-btn" :disabled="isProcessingVideo" @click="videoInputRef?.click()">
                 <CosmicIcon name="upload" size="14" />
-                <span>Choose Video (MP4, WebM)</span>
+                <span>{{ isProcessingVideo ? 'Loading Video...' : 'Choose Video (MP4, WebM)' }}</span>
               </button>
               <input
                 ref="videoInputRef"
